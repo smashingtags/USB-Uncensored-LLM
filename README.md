@@ -1,8 +1,8 @@
 # USB-Uncensored-LLM ⚡
 
-**USB-Uncensored-LLM** is a fully air-gapped, zero-dependency, plug-and-play Local AI environment designed to run seamlessly from a USB flash drive or portable SSD. It bypasses complex installations natively executing large language models directly on your hardware.
+**USB-Uncensored-LLM** is a fully air-gapped, zero-dependency, plug-and-play Local AI environment designed to run seamlessly from your **local hard drive** or a **portable USB/SSD**. It bypasses complex installations natively executing large language models directly on your hardware with no internet required.
 
-With a unified architecture, you can initialize the massive AI models once, and freely roam between Windows, macOS, and Linux PCs with your persistent chat history and settings intact.
+With a unified architecture, you can initialize your AI models once and choose to keep them on your system or carry them with you across Windows, macOS, and Linux PCs.
 
 ## 🚀 Core Features
 * **Zero Dependency Setup:** Ships with portable Python and isolated engine binaries. No system permissions, registry edits, or package managers required.
@@ -70,6 +70,20 @@ Open the respective OS folder and run the `start` script:
 * **Linux:** `bash Linux/start.sh`
 
 The engine will spin up securely in the background, and your default web browser will automatically open the locally-served Chat UI.
+
+---
+
+## 🏠 Local Disk Installation
+While this project is optimized for USB portability, it works beautifully as a lightweight local AI setup on your primary computer.
+
+**How to Install Locally:**
+1.  **Download/Clone** this repository to a folder on your `C:\` or `D:\` drive.
+2.  Navigate to the **Windows** (or Mac/Linux) folder.
+3.  Run **`install.bat`** and choose your desired models.
+4.  The system will download everything into that local folder. 
+5.  Run **`start-fast-chat.bat`** to begin.
+
+*Benefit:* Running from an internal SSD is significantly faster than a USB drive, resulting in near-instant AI model loading!
 
 ---
 
