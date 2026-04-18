@@ -130,6 +130,7 @@
     display: grid;
     grid-template-rows: auto 1fr auto;
     min-width: 0;
+    min-height: 0;
     background: var(--bg);
   }
 
@@ -166,6 +167,8 @@
   /* ---------- Messages ---------- */
   .messages {
     overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
     padding: 28px 0;
   }
   .message-wrap {
