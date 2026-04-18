@@ -85,6 +85,41 @@ goto :WAIT_LOOP
 :ENGINE_UP
 echo   [OK] Engine online.
 
+REM ---- Start secondary engine (llama-server for Gemma 4 on Arc) if needed ----
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command ^
+    "$s = Get-Content -Raw '%STATE%' | ConvertFrom-Json; $m = $s.installed ^| Where-Object { $_.engine -eq 'windows-intel-llamacpp' } ^| Select-Object -First 1; if ($m) { Write-Output ($m.id + '|' + $m.file) }"`) do set "LLAMACPP_SPEC=%%i"
+
+if defined LLAMACPP_SPEC (
+    for /f "tokens=1,2 delims=|" %%a in ("%LLAMACPP_SPEC%") do (
+        set "LLAMACPP_MODEL_ID=%%a"
+        set "LLAMACPP_MODEL_FILE=%%b"
+    )
+    set "LLAMACPP_DIR=%SHARED%\bin\windows-intel-llamacpp"
+    set "LLAMACPP_GGUF=%SHARED%\models\!LLAMACPP_MODEL_FILE!"
+    echo.
+    echo   Starting secondary engine ^(llama-server SYCL^) on :11441
+    echo     model: !LLAMACPP_MODEL_ID!
+    pushd "!LLAMACPP_DIR!"
+    start "" /b "!LLAMACPP_DIR!\llama-server.exe" -m "!LLAMACPP_GGUF!" -ngl 999 --host 127.0.0.1 --port 11441 --ctx-size 4096 --jinja --reasoning-format none
+    popd
+    set /a WAIT2=0
+    :WAIT_LLAMACPP
+    timeout /t 1 /nobreak >nul
+    curl -s http://127.0.0.1:11441/health >nul 2>&1
+    if !ERRORLEVEL!==0 goto :LLAMACPP_UP
+    set /a WAIT2+=1
+    if !WAIT2! GEQ 90 (
+        echo   WARNING: llama-server did not come up within 90s. Gemma 4 may be unavailable.
+        goto :LLAMACPP_SKIP
+    )
+    goto :WAIT_LLAMACPP
+    :LLAMACPP_UP
+    echo   [OK] Secondary engine online.
+    set "ELY_LLAMACPP_URL=http://127.0.0.1:11441"
+    set "ELY_LLAMACPP_MODEL_ID=!LLAMACPP_MODEL_ID!"
+    :LLAMACPP_SKIP
+)
+
 :START_CHAT
 set "PYTHON_CMD="
 if exist "%SHARED%\python\python.exe" (
@@ -114,8 +149,10 @@ echo.
 "%PYTHON_CMD%" "%SHARED%\chat_server.py"
 
 echo.
-echo   Shutting down engine...
+echo   Shutting down engines...
 taskkill /f /im ollama.exe >nul 2>&1
 taskkill /f /im ollama-lib.exe >nul 2>&1
 taskkill /f /im ollama-windows.exe >nul 2>&1
+taskkill /f /im llama-server.exe >nul 2>&1
+taskkill /f /im llama-cli.exe >nul 2>&1
 echo   Done.

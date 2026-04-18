@@ -129,6 +129,74 @@ foreach ($m in $selected) {
     Write-Ok "$($m.name) downloaded"
 }
 
+# ---------- Assign models to engines (primary vs secondary) ----------
+# Every selected model gets an engine. If the model has supportedBackends set
+# and the primary backend is not in it, we try to satisfy it with one of the
+# listed secondaries (e.g. windows-intel-llamacpp for Gemma 4 on Arc).
+$secondaryBackendsNeeded = @{}
+$modelEngine = @{}
+$primaryPlatform = ($backendKey -split '-')[0]
+foreach ($m in $selected) {
+    $sup = @($m.supportedBackends)
+    if (-not $sup -or $sup.Count -eq 0 -or $sup -contains $backendKey) {
+        $modelEngine[$m.id] = $backendKey
+    } else {
+        $chosen = $null
+        foreach ($b in $sup) {
+            if ($Catalog.backends.$b -and $b -like "$primaryPlatform-*") { $chosen = $b; break }
+        }
+        if (-not $chosen) {
+            foreach ($b in $sup) {
+                if ($Catalog.backends.$b) { $chosen = $b; break }
+            }
+        }
+        if ($chosen) {
+            $modelEngine[$m.id] = $chosen
+            $secondaryBackendsNeeded[$chosen] = $true
+        } else {
+            Write-Fail "$($m.name) - no backend in supportedBackends is known in catalog"
+            $modelEngine[$m.id] = $null
+        }
+    }
+}
+if ($secondaryBackendsNeeded.Count -gt 0) {
+    Write-Info ("Secondary engines needed: " + ($secondaryBackendsNeeded.Keys -join ', '))
+}
+
+# ---------- Install any secondary backends ----------
+foreach ($secKey in $secondaryBackendsNeeded.Keys) {
+    $sec = $Catalog.backends.$secKey
+    $secDir = Join-Path $BinDir $secKey
+    $secEntry = Join-Path $secDir $sec.entrypoint
+    if (Test-Path $secEntry) {
+        Write-Ok "Secondary engine already present: $secKey"
+        continue
+    }
+    New-Item -ItemType Directory -Force -Path $secDir | Out-Null
+    $secArchive = Join-Path $secDir '_download.zip'
+    Write-Info "Downloading secondary engine $secKey ($($sec.url))"
+    $attempt = 0; $ok = $false
+    while ($attempt -lt 3 -and -not $ok) {
+        $attempt++
+        & curl.exe -L --fail --ssl-no-revoke --progress-bar $sec.url -o $secArchive
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $secArchive)) { $ok = $true; break }
+        Start-Sleep 2
+    }
+    if (-not $ok) { Write-Fail "Secondary engine $secKey download failed"; continue }
+    Expand-Archive -Path $secArchive -DestinationPath $secDir -Force
+    Remove-Item $secArchive -Force -ErrorAction SilentlyContinue
+    # Flatten if binaries landed in a nested dir
+    if (-not (Test-Path $secEntry)) {
+        $found = Get-ChildItem -Path $secDir -Recurse -Filter ([System.IO.Path]::GetFileName($sec.entrypoint)) -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found) {
+            $srcDir = Split-Path $found.FullName -Parent
+            Get-ChildItem -Path $srcDir | Move-Item -Destination $secDir -Force -ErrorAction SilentlyContinue
+        }
+    }
+    if (Test-Path $secEntry) { Write-Ok "Secondary engine installed: $secKey" }
+    else { Write-Fail "Secondary engine entrypoint not found after extract: $secEntry" }
+}
+
 # ---------- Import models ----------
 Write-Step 5 'Registering models with the engine'
 Get-Process ollama,ollama-lib,ollama-windows -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -165,9 +233,29 @@ if (-not $up) {
 Write-Ok 'Engine online'
 
 $imported = @()
+$importedEngine = @{}
 foreach ($m in $selected) {
     $gguf = Join-Path $ModelsDir $m.file
     if (-not (Test-Path $gguf)) { Write-Info "Skip $($m.name) - file missing"; continue }
+
+    $eng = $modelEngine[$m.id]
+    if (-not $eng) { Write-Info "Skip $($m.name) - no compatible engine"; continue }
+
+    # llama.cpp engines don't have an Ollama registry - just record the GGUF + Modelfile
+    if ($eng -ne $backendKey) {
+        $mfPath = Join-Path $ModelsDir ("Modelfile-" + $m.id)
+        $sys = $m.systemPrompt -replace '"','\"'
+        @(
+            "FROM ./$($m.file)",
+            "PARAMETER temperature $($m.params.temperature)",
+            "PARAMETER top_p $($m.params.top_p)",
+            "SYSTEM `"$sys`""
+        ) | Set-Content -Path $mfPath -Encoding UTF8
+        Write-Ok "$($m.name) -> $eng (GGUF placed, llama-server will load at start)"
+        $imported += $m
+        $importedEngine[$m.id] = $eng
+        continue
+    }
 
     $mfPath = Join-Path $ModelsDir ("Modelfile-" + $m.id)
     $sys = $m.systemPrompt -replace '"','\"'
@@ -195,6 +283,7 @@ foreach ($m in $selected) {
         if (($tags.models | Where-Object { $_.name -match "^$($m.id):" })) {
             Write-Ok "$($m.name) registered"
             $imported += $m
+            $importedEngine[$m.id] = $backendKey
         } else {
             Write-Fail "$($m.name) - created but manifest not visible"
         }
@@ -234,6 +323,16 @@ Remove-Job $serveJob -ErrorAction SilentlyContinue
 $installedLines = foreach ($m in $imported) { "$($m.id)|$($m.name)|$($m.quality)" }
 $installedLines | Set-Content -Path (Join-Path $ModelsDir 'installed-models.txt') -Encoding UTF8
 
+$secondaryList = @()
+foreach ($secKey in $secondaryBackendsNeeded.Keys) {
+    $sec = $Catalog.backends.$secKey
+    $secondaryList += @{
+        key        = $secKey
+        label      = $sec.label
+        entrypoint = (Join-Path "Shared\bin\$secKey" $sec.entrypoint)
+    }
+}
+
 $state = @{
     product           = $Catalog.product
     version           = $Catalog.version
@@ -243,7 +342,8 @@ $state = @{
     entrypoint        = (Join-Path "Shared\bin\$backendKey" $backend.entrypoint)
     installedAt       = (Get-Date -Format 'o')
     smokeTokensPerSec = $smokeTps
-    installed         = $imported | ForEach-Object { @{ id = $_.id; name = $_.name; file = $_.file } }
+    secondaryBackends = $secondaryList
+    installed         = $imported | ForEach-Object { @{ id = $_.id; name = $_.name; file = $_.file; engine = $importedEngine[$_.id] } }
 }
 $state | ConvertTo-Json -Depth 5 | Set-Content -Path $StateFile -Encoding UTF8
 

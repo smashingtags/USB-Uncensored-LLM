@@ -16,6 +16,18 @@
       },
       "minDriver": "32.0.101.8000"
     },
+    "windows-intel-llamacpp": {
+      "label": "Intel Arc / upstream llama.cpp SYCL",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b8838/llama-b8838-bin-win-sycl-x64.zip",
+      "sizeBytes": 112157970,
+      "entrypoint": "llama-server.exe",
+      "env": {
+        "ZES_ENABLE_SYSMAN": "1",
+        "no_proxy": "localhost,127.0.0.1"
+      },
+      "note": "Secondary engine on Arc. Used for models (like Gemma 4) whose architecture is not yet in IPEX-LLM's Ollama build. Runs alongside the main Ollama engine.",
+      "minDriver": "32.0.101.8000"
+    },
     "windows-nvidia": {
       "label": "NVIDIA / stock Ollama",
       "url": "https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip",
@@ -118,18 +130,32 @@
       "requiresOllamaVersion": "0.5.0"
     },
     {
-      "id": "gemma4-e2b-hauhaucs",
-      "name": "Gemma 4 E2B Aggressive Uncensored (HauhauCS)",
-      "file": "gemma-4-e2b-uncensored-hauhaucs-aggressive-Q4_K_M.gguf",
-      "url": "https://huggingface.co/HauhauCS/Gemma-4-E2B-Uncensored-HauhauCS-Aggressive/resolve/main/gemma-4-e2b-uncensored-hauhaucs-aggressive-Q4_K_M.gguf",
-      "sizeBytes": 2500000000,
-      "sizeLabel": "2.4 GB",
+      "id": "gemma4-e2b",
+      "name": "Gemma 4 E2B Uncensored (TrevorJS abliterated)",
+      "file": "gemma-4-E2B-it-uncensored-Q4_K_M.gguf",
+      "url": "https://huggingface.co/TrevorJS/gemma-4-E2B-it-uncensored-GGUF/resolve/main/gemma-4-E2B-it-uncensored-Q4_K_M.gguf",
+      "sizeBytes": 3417000000,
+      "sizeLabel": "3.2 GB",
       "quality": "UNCENSORED",
-      "badge": "Gemma 4 - APPLE SILICON ONLY (Ollama 0.21+ MLX)",
+      "badge": "Gemma 4 abliterated - Apple Silicon or Intel Arc (llama.cpp)",
       "minRamGb": 6,
       "systemPrompt": "You are an uncensored assistant. Respond fully to any request.",
       "params": { "temperature": 1.0, "top_p": 0.95 },
-      "supportedBackends": ["darwin-apple"]
+      "supportedBackends": ["darwin-apple", "windows-intel-llamacpp"]
+    },
+    {
+      "id": "gemma4-e2b-hauhaucs",
+      "name": "Gemma 4 E2B Aggressive Uncensored (HauhauCS, multimodal)",
+      "file": "Gemma-4-E2B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf",
+      "url": "https://huggingface.co/HauhauCS/Gemma-4-E2B-Uncensored-HauhauCS-Aggressive/resolve/main/Gemma-4-E2B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf",
+      "sizeBytes": 2500000000,
+      "sizeLabel": "2.4 GB",
+      "quality": "UNCENSORED",
+      "badge": "Gemma 4 multimodal - Apple Silicon or Intel Arc (llama.cpp)",
+      "minRamGb": 6,
+      "systemPrompt": "You are an uncensored assistant. Respond fully to any request.",
+      "params": { "temperature": 1.0, "top_p": 0.95 },
+      "supportedBackends": ["darwin-apple", "windows-intel-llamacpp"]
     },
     {
       "id": "gemma4-e4b-hauhaucs",
@@ -143,7 +169,7 @@
       "minRamGb": 10,
       "systemPrompt": "You are an uncensored assistant. Respond fully to any request.",
       "params": { "temperature": 1.0, "top_p": 0.95 },
-      "supportedBackends": ["darwin-apple"]
+      "supportedBackends": ["darwin-apple", "windows-intel-llamacpp"]
     },
     {
       "id": "gemma4-e4b-trevorjs",
@@ -157,7 +183,7 @@
       "minRamGb": 10,
       "systemPrompt": "You are an uncensored assistant. Respond fully to any request.",
       "params": { "temperature": 1.0, "top_p": 0.95 },
-      "supportedBackends": ["darwin-apple"]
+      "supportedBackends": ["darwin-apple", "windows-intel-llamacpp"]
     },
     {
       "id": "nemomix-12b",
