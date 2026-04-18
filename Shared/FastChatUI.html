@@ -220,6 +220,35 @@
     font-family: "SF Mono", Menlo, Consolas, monospace;
   }
   .content pre code { background: transparent; padding: 0; }
+  .content details.thinking {
+    margin: 4px 0 10px;
+    padding: 8px 12px;
+    background: var(--panel-2);
+    border-left: 2px solid var(--border-strong);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+  .content details.thinking summary {
+    cursor: pointer;
+    color: var(--text-faint);
+    user-select: none;
+    list-style: none;
+    padding: 0;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .content details.thinking summary::-webkit-details-marker { display: none; }
+  .content details.thinking summary::before { content: "> "; color: var(--accent); }
+  .content details.thinking[open] summary::before { content: "v "; color: var(--accent); }
+  .content details.thinking .think-body {
+    margin-top: 8px;
+    white-space: pre-wrap;
+    font-family: inherit;
+    color: var(--text-dim);
+  }
   .msg-actions {
     margin-top: 6px;
     display: flex; gap: 8px;
@@ -603,7 +632,52 @@ const App = (() => {
   }
 
   function renderMarkdown(text) {
-    // Minimal: escape, then turn ```code``` into <pre><code>, `inline` into <code>.
+    // Split out reasoning/thinking blocks (Gemma 4 uses <|channel>thought ... <channel|>answer,
+    // DeepSeek/Qwen use <think>...</think>). Render thinking into a collapsible panel.
+    const segments = splitReasoning(text);
+    return segments.map(seg => {
+      if (seg.type === 'think') {
+        const openAttr = seg.closed ? '' : ' open';
+        return `<details class="thinking"${openAttr}><summary>Thinking</summary><div class="think-body">${renderMd(seg.text)}</div></details>`;
+      }
+      return renderMd(seg.text);
+    }).join('');
+  }
+
+  function splitReasoning(text) {
+    const out = [];
+    let i = 0;
+    while (i < text.length) {
+      // Gemma 4 pattern: <|channel>thought ... <channel|>
+      const g4Start = text.indexOf('<|channel>thought', i);
+      const thinkStart = text.indexOf('<think>', i);
+      // Pick the earliest pattern present
+      let startIdx = -1, startLen = 0, endTag = '';
+      if (g4Start !== -1 && (thinkStart === -1 || g4Start < thinkStart)) {
+        startIdx = g4Start; startLen = '<|channel>thought'.length; endTag = '<channel|>';
+      } else if (thinkStart !== -1) {
+        startIdx = thinkStart; startLen = '<think>'.length; endTag = '</think>';
+      }
+      if (startIdx === -1) {
+        if (i < text.length) out.push({ type: 'text', text: text.substring(i) });
+        break;
+      }
+      if (startIdx > i) out.push({ type: 'text', text: text.substring(i, startIdx) });
+      const afterOpen = startIdx + startLen;
+      const endIdx = text.indexOf(endTag, afterOpen);
+      if (endIdx === -1) {
+        // Still thinking (stream in progress)
+        out.push({ type: 'think', text: text.substring(afterOpen), closed: false });
+        i = text.length;
+      } else {
+        out.push({ type: 'think', text: text.substring(afterOpen, endIdx), closed: true });
+        i = endIdx + endTag.length;
+      }
+    }
+    return out;
+  }
+
+  function renderMd(text) {
     let html = escapeHtml(text);
     html = html.replace(/```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g, (_, _lang, code) => `<pre><code>${code.replace(/\n$/, '')}</code></pre>`);
     html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
