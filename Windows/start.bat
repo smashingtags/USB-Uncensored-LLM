@@ -87,56 +87,63 @@ echo   [OK] Engine online.
 
 REM ---- Start secondary engine (llama-server for Gemma 4 on Arc) if needed ----
 for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command ^
-    "$s = Get-Content -Raw '%STATE%' | ConvertFrom-Json; $m = $s.installed ^| Where-Object { $_.engine -eq 'windows-intel-llamacpp' } ^| Select-Object -First 1; if ($m) { Write-Output ($m.id + '|' + $m.file) }"`) do set "LLAMACPP_SPEC=%%i"
+    "$s = ConvertFrom-Json (Get-Content -Raw '%STATE%'); $m = $null; foreach ($x in $s.installed) { if ($x.engine -eq 'windows-intel-llamacpp') { $m = $x; break } }; if ($m) { Write-Output ($m.id + '~' + $m.file) }"`) do set "LLAMACPP_SPEC=%%i"
 
-if defined LLAMACPP_SPEC (
-    for /f "tokens=1,2 delims=|" %%a in ("%LLAMACPP_SPEC%") do (
-        set "LLAMACPP_MODEL_ID=%%a"
-        set "LLAMACPP_MODEL_FILE=%%b"
-    )
-    set "LLAMACPP_DIR=%SHARED%\bin\windows-intel-llamacpp"
-    set "LLAMACPP_GGUF=%SHARED%\models\!LLAMACPP_MODEL_FILE!"
-    echo.
-    echo   Starting secondary engine ^(llama-server SYCL^) on :11441
-    echo     model: !LLAMACPP_MODEL_ID!
-    pushd "!LLAMACPP_DIR!"
-    start "" /b "!LLAMACPP_DIR!\llama-server.exe" -m "!LLAMACPP_GGUF!" -ngl 999 --host 127.0.0.1 --port 11441 --ctx-size 4096 --jinja --reasoning-format none
-    popd
-    set /a WAIT2=0
-    :WAIT_LLAMACPP
-    timeout /t 1 /nobreak >nul
-    curl -s http://127.0.0.1:11441/health >nul 2>&1
-    if !ERRORLEVEL!==0 goto :LLAMACPP_UP
-    set /a WAIT2+=1
-    if !WAIT2! GEQ 90 (
-        echo   WARNING: llama-server did not come up within 90s. Gemma 4 may be unavailable.
-        goto :LLAMACPP_SKIP
-    )
-    goto :WAIT_LLAMACPP
-    :LLAMACPP_UP
-    echo   [OK] Secondary engine online.
-    set "ELY_LLAMACPP_URL=http://127.0.0.1:11441"
-    set "ELY_LLAMACPP_MODEL_ID=!LLAMACPP_MODEL_ID!"
-    :LLAMACPP_SKIP
+if not defined LLAMACPP_SPEC goto :AFTER_LLAMACPP
+
+for /f "tokens=1,2 delims=~" %%a in ("%LLAMACPP_SPEC%") do (
+    set "LLAMACPP_MODEL_ID=%%a"
+    set "LLAMACPP_MODEL_FILE=%%b"
 )
+set "LLAMACPP_DIR=%SHARED%\bin\windows-intel-llamacpp"
+set "LLAMACPP_GGUF=%SHARED%\models\!LLAMACPP_MODEL_FILE!"
+echo.
+echo   Starting secondary engine ^(llama-server SYCL^) on :11441
+echo     model: !LLAMACPP_MODEL_ID!
+pushd "!LLAMACPP_DIR!"
+start "" /b "!LLAMACPP_DIR!\llama-server.exe" -m "!LLAMACPP_GGUF!" -ngl 999 --host 127.0.0.1 --port 11441 --ctx-size 4096 --jinja --reasoning-format none
+popd
+set /a WAIT2=0
+:WAIT_LLAMACPP
+timeout /t 1 /nobreak >nul
+curl -s http://127.0.0.1:11441/health >nul 2>&1
+if !ERRORLEVEL!==0 goto :LLAMACPP_UP
+set /a WAIT2+=1
+if !WAIT2! GEQ 90 (
+    echo   WARNING: llama-server did not come up within 90s. Gemma 4 may be unavailable.
+    goto :AFTER_LLAMACPP
+)
+goto :WAIT_LLAMACPP
+:LLAMACPP_UP
+echo   [OK] Secondary engine online.
+set "ELY_LLAMACPP_URL=http://127.0.0.1:11441"
+set "ELY_LLAMACPP_MODEL_ID=!LLAMACPP_MODEL_ID!"
+:AFTER_LLAMACPP
 
 :START_CHAT
 set "PYTHON_CMD="
-if exist "%SHARED%\python\python.exe" (
-    set "PYTHON_CMD=%SHARED%\python\python.exe"
-) else (
-    python --version >nul 2>&1
-    if !ERRORLEVEL!==0 (
-        set "PYTHON_CMD=python"
-    ) else (
-        echo   Bootstrapping portable Python (11 MB)...
-        curl -L --ssl-no-revoke "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip" -o "%SHARED%\_python.zip"
-        if !ERRORLEVEL! NEQ 0 ( echo Python bootstrap download failed. & pause & exit /b 4 )
-        powershell -NoProfile -Command "Expand-Archive -Path '%SHARED%\_python.zip' -DestinationPath '%SHARED%\python' -Force"
-        del "%SHARED%\_python.zip" >nul 2>&1
-        set "PYTHON_CMD=%SHARED%\python\python.exe"
-    )
+if exist "%SHARED%\python\python.exe"                          set "PYTHON_CMD=%SHARED%\python\python.exe"
+if not defined PYTHON_CMD if exist "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
+if not defined PYTHON_CMD if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+if not defined PYTHON_CMD if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+if not defined PYTHON_CMD if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
+if not defined PYTHON_CMD (
+    for /f "usebackq delims=" %%p in (`where python.exe 2^>nul`) do if not defined PYTHON_CMD set "PYTHON_CMD=%%p"
 )
+if not defined PYTHON_CMD (
+    echo   No Python found. Bootstrapping portable Python ^(11 MB^)...
+    curl -L --ssl-no-revoke "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip" -o "%SHARED%\_python.zip"
+    if %ERRORLEVEL% NEQ 0 ( echo   Python bootstrap download failed. & pause & exit /b 4 )
+    powershell -NoProfile -Command "Expand-Archive -Path '%SHARED%\_python.zip' -DestinationPath '%SHARED%\python' -Force"
+    del "%SHARED%\_python.zip" >nul 2>&1
+    if exist "%SHARED%\python\python.exe" set "PYTHON_CMD=%SHARED%\python\python.exe"
+)
+if not defined PYTHON_CMD (
+    echo   ERROR: Could not locate or install Python.
+    pause
+    exit /b 5
+)
+echo   Python: %PYTHON_CMD%
 
 echo.
 echo   ========================================================
