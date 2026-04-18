@@ -1,82 +1,74 @@
-#!/bin/bash
-# ===================================================
-#  Portable AI - Fast Web Chat (Linux)
-# ===================================================
+#!/usr/bin/env bash
+# Eight.ly Stick - Linux launcher
+set -u
+cd "$(dirname "${BASH_SOURCE[0]}")"
+ROOT="$(cd .. && pwd)"
+SHARED="$ROOT/Shared"
+STATE="$SHARED/install-state.json"
+CATALOG="$SHARED/catalog.json"
 
-echo "==================================================="
-echo "    Portable AI - Fast Web Chat Mode (Linux)"
-echo "==================================================="
-echo ""
-echo "  Launches the AI engine + browser chat UI."
-echo "  All chats auto-save to the USB drive."
-echo ""
+echo
+echo "  ========================================================"
+echo "                     EIGHT.LY STICK"
+echo "  ========================================================"
+echo
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-USB_ROOT="$(dirname "$SCRIPT_DIR")"
-SHARED_DIR="$USB_ROOT/Shared"
-OLLAMA_RUNTIME="$SHARED_DIR/.ollama-runtime"
-mkdir -p "$OLLAMA_RUNTIME"
+[[ -f "$STATE" ]] || { echo "  No install detected. Run Linux/install.sh first."; exit 1; }
 
-# ---- Full portability: keep EVERYTHING on the USB ----
-export OLLAMA_MODELS="$SHARED_DIR/models/ollama_data"
-export OLLAMA_HOME="$OLLAMA_RUNTIME"
-export OLLAMA_RUNNERS_DIR="$OLLAMA_RUNTIME/runners"
-export OLLAMA_TMPDIR="$OLLAMA_RUNTIME/tmp"
+BACKEND=$(python3 -c "import json; print(json.load(open('$STATE'))['backend'])")
+ENTRY_REL=$(python3 -c "import json; print(json.load(open('$STATE'))['entrypoint'])")
+BACKEND_LABEL=$(python3 -c "import json; print(json.load(open('$STATE'))['backendLabel'])")
+GPU=$(python3 -c "import json; print(json.load(open('$STATE'))['gpu'])")
+ENTRY="$ROOT/$ENTRY_REL"
+BACKEND_DIR="$SHARED/bin/$BACKEND"
+
+echo "  CPU:     $GPU"
+echo "  Backend: $BACKEND_LABEL"
+echo
+
+[[ -x "$ENTRY" ]] || { echo "  ERROR: engine missing at $ENTRY"; exit 2; }
+
+eval "$(python3 -c "
+import json
+cat = json.load(open('$CATALOG'))
+for k,v in cat['backends']['$BACKEND']['env'].items():
+    print(f'export {k}={v!r}')
+")"
+
+export OLLAMA_MODELS="$SHARED/models/ollama_data"
+export OLLAMA_HOST="127.0.0.1:11438"
 export OLLAMA_ORIGINS="*"
-export OLLAMA_HOST="127.0.0.1:11434"
-mkdir -p "$OLLAMA_RUNTIME/runners" "$OLLAMA_RUNTIME/tmp"
-# -------------------------------------------------------
+export ELY_OLLAMA_URL="http://127.0.0.1:11438"
+export ELY_CHAT_PORT="3333"
 
-# Check if the portable Linux engine is downloaded
-if [ ! -f "$SHARED_DIR/bin/ollama-linux" ]; then
-    echo "==================================================="
-    echo "  ERROR: Linux AI Engine Not Found!"
-    echo "==================================================="
-    echo ""
-    echo "  It looks like the AI engine hasn't been set up yet."
-    echo "  Please run 'bash install.sh' in this Linux"
-    echo "  folder first to safely download the components!"
-    echo ""
-    read -n 1 -s -r -p "Press any key to continue..."
-    echo ""
-    exit 1
-fi
-
-# Check if Ollama is already running
-if curl -s http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
-    echo "[OK] Ollama engine is already running!"
+if curl -s --max-time 2 http://127.0.0.1:11438/api/tags >/dev/null 2>&1; then
+  echo "  [OK] Engine already running on :11438."
 else
-    echo "Starting offline Linux AI Engine..."
-    HOME="$OLLAMA_RUNTIME" "$SHARED_DIR/bin/ollama-linux" serve &
-    OLLAMA_PID=$!
-    
-    echo "Waiting for engine to initialize..."
-    until curl -s http://127.0.0.1:11434/api/tags > /dev/null 2>&1; do
-        sleep 1
-    done
-    echo "[OK] Engine is online!"
+  echo "  Starting engine on :11438..."
+  ( cd "$BACKEND_DIR" && "$ENTRY" serve >"$BACKEND_DIR/serve.log" 2>&1 ) &
+  for _ in {1..30}; do
+    if curl -s --max-time 2 http://127.0.0.1:11438/api/tags >/dev/null 2>&1; then break; fi
+    sleep 1
+  done
+  if ! curl -s --max-time 2 http://127.0.0.1:11438/api/tags >/dev/null 2>&1; then
+    echo "  ERROR: engine did not come up within 30s."
+    [[ -f "$BACKEND_DIR/serve.log" ]] && tail -n 20 "$BACKEND_DIR/serve.log"
+    exit 3
+  fi
+  echo "  [OK] Engine online."
 fi
 
-echo ""
-echo "==================================================="
-echo "  AI ENGINE IS RUNNING"
-echo "  Chat UI will open automatically."
-echo "  Press Ctrl+C to shut down."
-echo "==================================================="
-echo ""
+cleanup(){ echo; echo "  Shutting down engine..."; pkill -9 -f 'ollama' 2>/dev/null || true; }
+trap cleanup EXIT INT TERM
 
-# Launch Python chat server using system Python
-if command -v python3 &> /dev/null; then
-    python3 "$SHARED_DIR/chat_server.py"
-elif command -v python &> /dev/null; then
-    python "$SHARED_DIR/chat_server.py"
-else
-    echo "ERROR: Python not found. Please install python3 via your package manager."
-    exit 1
-fi
+echo
+echo "  ========================================================"
+echo "     Eight.ly Stick is running."
+echo "     Chat UI:  http://localhost:3333"
+echo "     Ctrl+C to shut down."
+echo "  ========================================================"
+echo
 
-# Cleanup
-if [ -n "$OLLAMA_PID" ]; then
-    kill -9 $OLLAMA_PID 2>/dev/null
-fi
-echo "Goodbye!"
+( sleep 1 && xdg-open http://localhost:3333 >/dev/null 2>&1 ) &
+
+exec python3 "$SHARED/chat_server.py"
