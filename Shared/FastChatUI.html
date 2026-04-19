@@ -925,21 +925,26 @@ const App = (() => {
 
   async function installCatalogModel(id) {
     const status = $('pull-status');
-    status.textContent = 'Installing ' + id + '... this may take a while (downloading model weights).';
+    status.textContent = 'Installing ' + id + '... downloading model weights (this can take several minutes).';
     status.style.color = 'var(--accent)';
+    // Disable all install buttons while downloading
+    document.querySelectorAll('#catalog-list button').forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
     try {
-      const r = await fetch('/ollama/api/pull', {
+      const r = await fetch('/api/install-model', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: id, stream: false }),
+        body: JSON.stringify({ id }),
       });
-      if (!r.ok) throw new Error(await r.text().catch(() => 'pull failed'));
-      status.textContent = id + ' installed!';
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'install failed');
+      status.textContent = (j.name || id) + ' installed successfully!';
+      status.style.color = 'var(--accent)';
       renderModels();
       refreshModelsList();
     } catch (e) {
       status.textContent = 'Install failed: ' + e.message;
       status.style.color = 'var(--danger)';
+      document.querySelectorAll('#catalog-list button').forEach(b => { b.disabled = false; b.style.opacity = '1'; });
     }
   }
 

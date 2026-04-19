@@ -291,6 +291,9 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/settings":
             self._save_settings()
 
+        elif path == "/api/install-model":
+            self._install_catalog_model()
+
         # Proxy Ollama API
         elif path.startswith("/ollama/"):
             self._proxy_ollama("POST")
@@ -367,6 +370,104 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
         self._cors_headers()
         self.end_headers()
         self.wfile.write(data.encode("utf-8"))
+
+    # ── Model Install (GGUF download + ollama create) ──────────
+    def _install_catalog_model(self):
+        import subprocess
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length)
+        try:
+            req = json.loads(body)
+            model_id = req.get("id", "")
+        except:
+            self._respond_json({"error": "bad request"}, 400); return
+
+        catalog_path = os.path.join(SCRIPT_DIR, "catalog.json")
+        try:
+            catalog = json.load(open(catalog_path))
+        except:
+            self._respond_json({"error": "catalog not found"}, 500); return
+
+        model = None
+        for m in catalog.get("models", []):
+            if m["id"] == model_id:
+                model = m; break
+        if not model:
+            self._respond_json({"error": f"model {model_id} not in catalog"}, 404); return
+
+        models_dir = os.path.join(SCRIPT_DIR, "models")
+        os.makedirs(models_dir, exist_ok=True)
+        gguf_path = os.path.join(models_dir, model["file"])
+
+        # Step 1: Download GGUF if not present
+        if not os.path.exists(gguf_path) or os.path.getsize(gguf_path) < model.get("sizeBytes", 1) * 0.9:
+            sys.stderr.write(f"[install] downloading {model['name']} ({model['sizeLabel']})...\n")
+            try:
+                dl_req = urllib.request.Request(model["url"])
+                dl_req.add_header("User-Agent", "Mozilla/5.0")
+                with urllib.request.urlopen(dl_req, timeout=1800) as resp:
+                    with open(gguf_path + ".tmp", "wb") as f:
+                        while True:
+                            chunk = resp.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                os.replace(gguf_path + ".tmp", gguf_path)
+                sys.stderr.write(f"[install] downloaded {model['file']}\n")
+            except Exception as e:
+                try: os.remove(gguf_path + ".tmp")
+                except: pass
+                self._respond_json({"error": f"download failed: {e}"}, 500); return
+
+        # Step 2: Create Modelfile
+        sys_prompt = model.get("systemPrompt", "").replace('"', '\\"')
+        temp = model.get("params", {}).get("temperature", 0.7)
+        top_p = model.get("params", {}).get("top_p", 0.9)
+        modelfile_path = os.path.join(models_dir, f"Modelfile-{model_id}")
+        with open(modelfile_path, "w") as f:
+            f.write(f"FROM ./{model['file']}\n")
+            f.write(f"PARAMETER temperature {temp}\n")
+            f.write(f"PARAMETER top_p {top_p}\n")
+            if sys_prompt:
+                f.write(f'SYSTEM "{sys_prompt}"\n')
+
+        # Step 3: ollama create
+        ollama_host = OLLAMA_HOST.replace("http://", "").replace("https://", "")
+        env = dict(os.environ)
+        env["OLLAMA_HOST"] = ollama_host
+        sys.stderr.write(f"[install] running ollama create {model_id}...\n")
+        try:
+            result = subprocess.run(
+                ["ollama", "create", model_id, "-f", modelfile_path],
+                cwd=models_dir, env=env, capture_output=True, text=True, timeout=300
+            )
+            if result.returncode != 0:
+                # Try with full path to ollama
+                ollama_bin = None
+                for d in os.listdir(os.path.join(SCRIPT_DIR, "bin")):
+                    candidate = os.path.join(SCRIPT_DIR, "bin", d, "ollama.exe" if os.name == "nt" else "ollama")
+                    if os.path.exists(candidate):
+                        ollama_bin = candidate; break
+                if ollama_bin:
+                    result = subprocess.run(
+                        [ollama_bin, "create", model_id, "-f", modelfile_path],
+                        cwd=models_dir, env=env, capture_output=True, text=True, timeout=300
+                    )
+            if result.returncode != 0:
+                self._respond_json({"error": f"ollama create failed: {result.stderr[:300]}"}, 500); return
+        except FileNotFoundError:
+            self._respond_json({"error": "ollama binary not found"}, 500); return
+
+        sys.stderr.write(f"[install] {model['name']} installed successfully\n")
+        self._respond_json({"ok": True, "model": model_id, "name": model["name"]})
+
+    def _respond_json(self, obj, status=200):
+        data = json.dumps(obj).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self._cors_headers()
+        self.end_headers()
+        self.wfile.write(data)
 
     # ── Chat Persistence ───────────────────────────────────────
     def _get_chats(self):
