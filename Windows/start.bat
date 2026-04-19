@@ -174,17 +174,8 @@ if defined NODE_CMD if exist "%SHARED%\agent\server.mjs" (
     start "Eight.ly Forge Agent" /b "%NODE_CMD%" "%SHARED%\agent\server.mjs"
 )
 
-echo.
-echo   ========================================================
-echo      Eight.ly Forge is running.
-echo      Chat UI:      http://localhost:%ELY_CHAT_PORT%
-if defined NODE_CMD (
-    echo      Agent UI:     http://localhost:%ELY_AGENT_PORT%
-)
-echo      Close this window to shut down.
-echo   ========================================================
-echo.
-
+REM chat_server.py prints the one authoritative banner (URLs + LAN IP + agent).
+REM Don't duplicate it here so the user always sees the same banner format.
 "%PYTHON_CMD%" "%SHARED%\chat_server.py"
 
 echo.

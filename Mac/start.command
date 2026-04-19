@@ -90,16 +90,6 @@ if [[ -n "$NODE_BIN" && -f "$SHARED/agent/server.mjs" ]]; then
   ELY_AGENT_PORT="$ELY_AGENT_PORT" "$NODE_BIN" "$SHARED/agent/server.mjs" >"$SHARED/chat_data/agent.log" 2>&1 &
 fi
 
-echo
-echo "  ========================================================"
-echo "     Eight.ly Forge is running."
-echo "     Chat UI:      http://localhost:3333"
-[[ -n "$NODE_BIN" ]] && echo "     Agent UI:     http://localhost:$ELY_AGENT_PORT"
-echo "     Close this Terminal window to shut down."
-echo "  ========================================================"
-echo
-
-# Open the UI in the default browser (non-blocking)
+# chat_server.py prints the one authoritative banner. Don't duplicate here.
 ( sleep 1 && /usr/bin/open http://localhost:3333 ) >/dev/null 2>&1 &
-
 exec python3 "$SHARED/chat_server.py"

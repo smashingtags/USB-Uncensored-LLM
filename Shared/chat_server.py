@@ -872,23 +872,35 @@ def main():
     except Exception:
         pass
 
+    # Single, authoritative banner. Same format on Windows / Mac / Linux so
+    # the URL you open never moves between runs. If an agent dashboard is
+    # running it gets a second line; otherwise just the two chat URLs.
+    agent_port = os.environ.get("ELY_AGENT_PORT", "").strip()
+    agent_url_local = f"http://localhost:{agent_port}" if agent_port else ""
+    agent_url_lan   = f"http://{local_ip}:{agent_port}" if agent_port else ""
+
     print()
-    print("=" * 55)
-    print("  Portable AI — Chat Server")
-    print("=" * 55)
+    print("=" * 64)
+    print("              EIGHT.LY FORGE  -  running")
+    print("=" * 64)
     print()
-    print(f"  Local Access:    http://localhost:{CHAT_SERVER_PORT}")
-    print(f"  Network Access:  http://{local_ip}:{CHAT_SERVER_PORT}   <-- Use this on phone/other PC!")
-    print(f"  Ollama Proxy:       {OLLAMA_HOST}")
+    print("  OPEN IN YOUR BROWSER:")
+    print()
+    print(f"    On this computer :  http://localhost:{CHAT_SERVER_PORT}")
+    print(f"    On phone / LAN   :  http://{local_ip}:{CHAT_SERVER_PORT}")
+    if agent_port:
+        print()
+        print("  AGENT DASHBOARD:")
+        print(f"    On this computer :  {agent_url_local}")
+        print(f"    On phone / LAN   :  {agent_url_lan}")
+    print()
+    print(f"  Ollama        :  {OLLAMA_HOST}")
     if LLAMACPP_HOST and LLAMACPP_MODEL_ID:
-        print(f"  llama.cpp Proxy:    {LLAMACPP_HOST}  (serving '{LLAMACPP_MODEL_ID}')")
-    if LLAMA_CPP_MODE:
-        print("  Running in LLAMA_CPP_MODE (Translating API requests)")
+        print(f"  llama.cpp     :  {LLAMACPP_HOST}  (model: {LLAMACPP_MODEL_ID})")
     print()
-    print("  All chats auto-save to the USB drive!")
     print("  Press Ctrl+C to shut down.")
+    print("=" * 64)
     print()
-    print("-" * 55)
 
     server = ThreadedHTTPServer(("0.0.0.0", CHAT_SERVER_PORT), ChatHandler)
 
