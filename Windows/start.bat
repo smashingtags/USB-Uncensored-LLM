@@ -129,7 +129,9 @@ set "ELY_LLAMACPP_MODEL_ID=!LLAMACPP_MODEL_ID!"
 
 :START_CHAT
 set "PYTHON_CMD="
-if exist "%SHARED%\python\python.exe"                          set "PYTHON_CMD=%SHARED%\python\python.exe"
+REM Check portable Python from Setup_First_Time (Windows\bin\python) FIRST
+if exist "%ROOT%\Windows\bin\python\python.exe"                set "PYTHON_CMD=%ROOT%\Windows\bin\python\python.exe"
+if not defined PYTHON_CMD if exist "%SHARED%\python\python.exe" set "PYTHON_CMD=%SHARED%\python\python.exe"
 if not defined PYTHON_CMD if exist "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
 if not defined PYTHON_CMD if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
 if not defined PYTHON_CMD if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
