@@ -609,18 +609,43 @@ const App = (() => {
       <div class="hints">Pick a model above and start typing.</div>
     </div>`;
 
+  // Track which chat + message-count are currently rendered so we can
+  // do incremental appends during a stream instead of wiping the DOM on
+  // every token. For a 200-message history the old path did O(n) DOM
+  // work per token => O(n*t) over the stream, noticeable jank on USB /
+  // older CPUs. New path appends exactly the new messages and leaves
+  // prior bubbles alone.
+  let _renderedChatId = null;
+  let _renderedCount = 0;
+
   function renderMessages() {
     const chat = currentChat();
     const box = $('messages');
     if (!chat || chat.messages.length === 0) {
       box.innerHTML = EMPTY_STATE_HTML;
+      _renderedChatId = null; _renderedCount = 0;
       return;
     }
-    box.innerHTML = '<div class="message-wrap" id="message-wrap"></div>';
-    const wrap = $('message-wrap');
-    for (const m of chat.messages) {
-      wrap.appendChild(renderMessage(m));
+    const sameChat = (chat.id === _renderedChatId);
+    let wrap = $('message-wrap');
+    if (!sameChat || !wrap) {
+      // Full paint: new chat or first time.
+      box.innerHTML = '<div class="message-wrap" id="message-wrap"></div>';
+      wrap = $('message-wrap');
+      for (const m of chat.messages) wrap.appendChild(renderMessage(m));
+    } else if (chat.messages.length > _renderedCount) {
+      // Incremental: only append messages that appeared since last render.
+      for (let i = _renderedCount; i < chat.messages.length; i++) {
+        wrap.appendChild(renderMessage(chat.messages[i]));
+      }
+    } else if (chat.messages.length < _renderedCount) {
+      // Messages were deleted -> fall back to full paint.
+      box.innerHTML = '<div class="message-wrap" id="message-wrap"></div>';
+      wrap = $('message-wrap');
+      for (const m of chat.messages) wrap.appendChild(renderMessage(m));
     }
+    _renderedChatId = chat.id;
+    _renderedCount = chat.messages.length;
     scrollToBottom();
   }
 
@@ -790,6 +815,16 @@ const App = (() => {
       const reader = resp.body.getReader();
       const dec = new TextDecoder();
       let buf = '';
+      // Throttle re-renders to ~30 fps. Per-token innerHTML re-parses the
+      // whole markdown string; for a 2000-token answer that is O(n^2)
+      // work. Coalescing to frames keeps the typewriter feel without the
+      // CPU burn.
+      let pendingRender = false;
+      const flush = () => {
+        pendingRender = false;
+        lastContent.innerHTML = renderMarkdown(assistantMsg.content);
+        scrollToBottom();
+      };
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -802,12 +837,18 @@ const App = (() => {
             const j = JSON.parse(line);
             if (j.message && j.message.content) {
               assistantMsg.content += j.message.content;
-              lastContent.innerHTML = renderMarkdown(assistantMsg.content);
-              scrollToBottom();
+              if (!pendingRender) {
+                pendingRender = true;
+                requestAnimationFrame(flush);
+              }
             }
           } catch {}
         }
       }
+      // Final render on stream end so the last few tokens never get stuck in
+      // the "pending" coalesce window.
+      lastContent.innerHTML = renderMarkdown(assistantMsg.content);
+      scrollToBottom();
     } catch (e) {
       if (e.name !== 'AbortError') {
         assistantMsg.content += `\n\n[error: ${e.message}]`;

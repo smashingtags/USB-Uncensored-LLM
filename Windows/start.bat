@@ -108,7 +108,20 @@ echo.
 echo   Starting secondary engine ^(llama-server SYCL^) on :%ELY_LLAMACPP_PORT%
 echo     model: !LLAMACPP_MODEL_ID!
 pushd "!LLAMACPP_DIR!"
-start "" /b "!LLAMACPP_DIR!\llama-server.exe" -m "!LLAMACPP_GGUF!" -ngl 999 --host 127.0.0.1 --port %ELY_LLAMACPP_PORT% --ctx-size 4096 --jinja --reasoning-format none
+REM llama-server flags tuned for Intel Arc Pro B50 (16 GB VRAM):
+REM   --flash-attn              : fused attention kernels, ~30%% faster + less VRAM
+REM   --cache-type-k/v q8_0     : quantize KV cache so we can fit the bigger ctx
+REM   --ctx-size 16384          : 4x the prior 4096 ceiling; long reasoning chains fit
+REM   --parallel 4              : allow 4 concurrent slots (warms workers, improves throughput)
+REM   --batch-size 256 --ubatch-size 32 : optimal batching for Arc Xe-cores
+REM   --threads 8 --threads-http 4 : split inference from the HTTP path
+REM   --jinja --reasoning-format none : preserve <think> tags inline so the UI collapses them
+start "" /b "!LLAMACPP_DIR!\llama-server.exe" -m "!LLAMACPP_GGUF!" -ngl 999 ^
+    --host 127.0.0.1 --port %ELY_LLAMACPP_PORT% ^
+    --ctx-size 16384 --batch-size 256 --ubatch-size 32 ^
+    --flash-attn --cache-type-k q8_0 --cache-type-v q8_0 ^
+    --parallel 4 --threads 8 --threads-http 4 ^
+    --jinja --reasoning-format none
 popd
 set /a WAIT2=0
 :WAIT_LLAMACPP

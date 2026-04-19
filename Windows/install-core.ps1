@@ -99,12 +99,26 @@ if (Test-Path $entrypoint) {
     $attempt = 0; $ok = $false
     while ($attempt -lt 3 -and -not $ok) {
         $attempt++
-        & curl.exe -L --fail --ssl-no-revoke --progress-bar $backend.url -o $archive
+        # -C - resumes a partial download from the last byte received, so
+        # network blips during 100+ MB engine zips don't reset progress.
+        & curl.exe -L --fail --ssl-no-revoke --progress-bar -C - $backend.url -o $archive
         if ($LASTEXITCODE -eq 0 -and (Test-Path $archive)) { $ok = $true; break }
         Write-Info "Attempt $attempt failed, retrying..."
         Start-Sleep 2
     }
     if (-not $ok) { Write-Fail "Engine download failed after 3 attempts"; exit 4 }
+    # Size sanity check: catalog publishes sizeBytes for engines; if the
+    # downloaded archive is much smaller than expected, the download was
+    # truncated by a proxy / captive portal and extraction will fail weirdly.
+    if ($backend.sizeBytes) {
+        $fi = Get-Item $archive
+        $expected = [int64]$backend.sizeBytes
+        if ($fi.Length -lt ($expected * 0.95)) {
+            Write-Fail ("Engine archive is only {0} bytes, expected ~{1}. Bad download; rerun install." -f $fi.Length, $expected)
+            Remove-Item $archive -Force -ErrorAction SilentlyContinue
+            exit 6
+        }
+    }
     Write-Info 'Extracting...'
     Expand-Archive -Path $archive -DestinationPath $backendDir -Force
     Remove-Item $archive -Force -ErrorAction SilentlyContinue
@@ -213,11 +227,19 @@ foreach ($secKey in $secondaryBackendsNeeded.Keys) {
     $attempt = 0; $ok = $false
     while ($attempt -lt 3 -and -not $ok) {
         $attempt++
-        & curl.exe -L --fail --ssl-no-revoke --progress-bar $sec.url -o $secArchive
+        & curl.exe -L --fail --ssl-no-revoke --progress-bar -C - $sec.url -o $secArchive
         if ($LASTEXITCODE -eq 0 -and (Test-Path $secArchive)) { $ok = $true; break }
         Start-Sleep 2
     }
     if (-not $ok) { Write-Fail "Secondary engine $secKey download failed"; continue }
+    if ($sec.sizeBytes) {
+        $fi = Get-Item $secArchive
+        if ($fi.Length -lt ([int64]$sec.sizeBytes * 0.95)) {
+            Write-Fail ("Secondary archive {0} only {1} bytes, expected ~{2}" -f $secKey, $fi.Length, $sec.sizeBytes)
+            Remove-Item $secArchive -Force -ErrorAction SilentlyContinue
+            continue
+        }
+    }
     Expand-Archive -Path $secArchive -DestinationPath $secDir -Force
     Remove-Item $secArchive -Force -ErrorAction SilentlyContinue
     # Flatten if binaries landed in a nested dir

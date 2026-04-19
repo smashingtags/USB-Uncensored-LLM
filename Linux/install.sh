@@ -87,10 +87,22 @@ else
   attempt=0
   while :; do
     attempt=$((attempt + 1))
-    curl $CURL_OPTS "$BACKEND_URL" -o "$archive" && break
+    # -C - resumes from the last byte if a prior attempt left a partial file.
+    curl $CURL_OPTS -C - "$BACKEND_URL" -o "$archive" && break
     (( attempt >= 3 )) && { ely_fail "Engine download failed"; exit 4; }
     ely_info "Attempt $attempt failed, retrying..."; sleep 2
   done
+  # Size sanity (catalog may publish sizeBytes for the engine).
+  EXPECTED=$(python3 -c "import json; c=json.load(open('$CATALOG')); print(c['backends'].get('$BACKEND_KEY',{}).get('sizeBytes',0))")
+  if [[ -n "$EXPECTED" && "$EXPECTED" -gt 0 ]]; then
+    GOT=$(stat -c '%s' "$archive" 2>/dev/null || stat -f '%z' "$archive")
+    MIN=$(( EXPECTED * 95 / 100 ))
+    if (( GOT < MIN )); then
+      ely_fail "Engine archive is $GOT bytes, expected ~$EXPECTED. Bad download."
+      rm -f "$archive"
+      exit 6
+    fi
+  fi
   ely_info "Extracting..."
   ely_extract "$archive" "$BACKEND_DIR"
   rm -f "$archive"
