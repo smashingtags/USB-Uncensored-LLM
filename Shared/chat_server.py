@@ -513,17 +513,26 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
             )
 
     def _stream_openai_sse_as_ollama_ndjson(self, resp):
-        """Stream SSE chunks from llama-server as Ollama-style newline-delimited JSON."""
+        """Stream SSE chunks from llama-server as Ollama-style newline-delimited JSON.
+
+        Buffers across reads — a single `data: {...}` line can span multiple
+        socket reads. Split on \\n only AFTER accumulating, and keep the
+        trailing partial as the seed for the next iteration."""
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson")
         self._cors_headers()
         self.end_headers()
-        while True:
+        buf = ""
+        done = False
+        while not done:
             chunk = resp.read(4096)
             if not chunk:
                 break
-            for line in chunk.decode(errors="ignore").split("\n"):
-                if not line.startswith("data: "):
+            buf += chunk.decode(errors="ignore")
+            while "\n" in buf:
+                line, buf = buf.split("\n", 1)
+                line = line.strip()
+                if not line or not line.startswith("data: "):
                     continue
                 data = line[6:].strip()
                 if data == "[DONE]":
@@ -532,6 +541,7 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
                         self.wfile.flush()
                     except Exception as e:
                         sys.stderr.write(f"[chat_server] stream DONE flush failed: {e}\n")
+                    done = True
                     break
                 try:
                     j = json.loads(data)
