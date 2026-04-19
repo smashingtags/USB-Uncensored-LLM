@@ -75,17 +75,23 @@ echo   !YELLOW![DIAGNOSTIC] Host PC Pre-Check:!RESET!
 if "!HAS_GIT!"=="1" ( echo   - Git:    !GREEN![FOUND]!RESET! ) else ( echo   - Git:    !RED![MISSING]!RESET! )
 if "!HAS_PYTHON!"=="1" ( echo   - Python: !GREEN![FOUND]!RESET! ) else ( echo   - Python: !RED![MISSING]!RESET! )
 echo.
-if "!HAS_GIT!"=="1" if "!HAS_PYTHON!"=="1" (
-    echo   !DIM![INFO] Git and Python are already installed on your PC.!RESET!
-    echo   !DIM!However, installing them on the USB makes it fully portable!RESET!
-    echo   !DIM!for PCs that don't have them.!RESET!
-) else (
-    echo   Would you like to install Portable Python and Git inside the USB?
-    echo   ^(Adds ~70MB but guarantees the AI can write/run code on ANY computer^)
+REM Auto-install portable tools if Git or Python are missing on the host.
+REM No point asking — without Git the coding agents can't function.
+if "!HAS_GIT!"=="0" (
+    echo   !YELLOW![AUTO] Git not found on this PC. Installing portable Git + Python.!RESET!
+    set "PACK_TOOLS=Y"
+    goto skip_tools_prompt
 )
+if "!HAS_PYTHON!"=="0" (
+    echo   !YELLOW![AUTO] Python not found on this PC. Installing portable Git + Python.!RESET!
+    set "PACK_TOOLS=Y"
+    goto skip_tools_prompt
+)
+echo   !DIM![INFO] Git and Python are already installed on your PC.!RESET!
+echo   !DIM!Installing them on the USB makes it fully portable for other PCs.!RESET!
 :prompt_tools
 set "PACK_TOOLS="
-set /p "PACK_TOOLS=  Install Portable Developer Tools? (Y/N): "
+set /p "PACK_TOOLS=  Install Portable Developer Tools anyway? (Y/N): "
 if defined PACK_TOOLS set "PACK_TOOLS=!PACK_TOOLS: =!"
 if /I "!PACK_TOOLS!"=="N" goto skip_tools_prompt
 if /I "!PACK_TOOLS!"=="Y" goto skip_tools_prompt
