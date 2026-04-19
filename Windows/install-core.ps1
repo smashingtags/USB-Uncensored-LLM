@@ -337,23 +337,45 @@ foreach ($m in $selected) {
 # ---------- Smoke test ----------
 $smokeTps = 0
 if ($imported.Count -gt 0) {
-    Write-Step 6 'Smoke test (proves acceleration)'
-    $testModel = ($imported | Where-Object { $_.id -eq 'gemma2-2b' } | Select-Object -First 1)
-    if (-not $testModel) { $testModel = $imported[0] }
+    # Pick a generation-capable model. Embedding models (nomic-embed-text)
+    # don't support /api/generate — if the user only installed embeddings,
+    # we skip the tok/s benchmark entirely.
+    $generatable = $imported | Where-Object {
+        $catEntry = $Catalog.models | Where-Object { $_.id -eq $_.id } | Select-Object -First 1
+        $caps = ($Catalog.models | Where-Object { $_.id -eq $_.id } | Select-Object -First 1 -ExpandProperty capabilities -ErrorAction SilentlyContinue)
+        if (-not $caps) { $true } else { -not ($caps -contains 'embedding') }
+    }
+    # Rebuild using the catalog directly (the PSObject chain above is fragile).
+    $generatable = @()
+    foreach ($m in $imported) {
+        $entry = $Catalog.models | Where-Object { $_.id -eq $m.id } | Select-Object -First 1
+        $caps  = @()
+        if ($entry -and $entry.PSObject.Properties.Name -contains 'capabilities') { $caps = @($entry.capabilities) }
+        if (-not ($caps -contains 'embedding')) { $generatable += $m }
+    }
 
-    Write-Info "Warming up $($testModel.id) (first Intel run JIT-compiles SYCL kernels)..."
-    $warm = @{ model = $testModel.id; prompt = 'Hi'; stream = $false; options = @{ num_predict = 8 } } | ConvertTo-Json
-    try { $null = Invoke-RestMethod -Uri "http://127.0.0.1:$InstallPort/api/generate" -Method Post -Body $warm -ContentType 'application/json' -TimeoutSec 180 } catch {}
+    if ($generatable.Count -eq 0) {
+        Write-Step 6 'Smoke test'
+        Write-Info 'Only embedding models installed; skipping tok/s benchmark.'
+    } else {
+        Write-Step 6 'Smoke test (proves acceleration)'
+        $testModel = ($generatable | Where-Object { $_.id -eq 'gemma2-2b' } | Select-Object -First 1)
+        if (-not $testModel) { $testModel = $generatable[0] }
 
-    Write-Info 'Timed 100-token generation...'
-    $body = @{ model = $testModel.id; prompt = 'Write 100 words about the future of portable AI.'; stream = $false; options = @{ num_predict = 100; temperature = 0.7 } } | ConvertTo-Json
-    try {
-        $r = Invoke-RestMethod -Uri "http://127.0.0.1:$InstallPort/api/generate" -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 180
-        $evalMs = [math]::Round($r.eval_duration / 1000000)
-        $smokeTps = if ($evalMs -gt 0) { [math]::Round($r.eval_count * 1000.0 / $evalMs, 2) } else { 0 }
-        Write-Ok ("Throughput: {0} tok/s  ({1} tokens in {2} ms)" -f $smokeTps, $r.eval_count, $evalMs)
-    } catch {
-        Write-Fail "Smoke test failed: $_"
+        Write-Info "Warming up $($testModel.id) (first Intel run JIT-compiles SYCL kernels)..."
+        $warm = @{ model = $testModel.id; prompt = 'Hi'; stream = $false; options = @{ num_predict = 8 } } | ConvertTo-Json
+        try { $null = Invoke-RestMethod -Uri "http://127.0.0.1:$InstallPort/api/generate" -Method Post -Body $warm -ContentType 'application/json' -TimeoutSec 180 } catch {}
+
+        Write-Info 'Timed 100-token generation...'
+        $body = @{ model = $testModel.id; prompt = 'Write 100 words about the future of portable AI.'; stream = $false; options = @{ num_predict = 100; temperature = 0.7 } } | ConvertTo-Json
+        try {
+            $r = Invoke-RestMethod -Uri "http://127.0.0.1:$InstallPort/api/generate" -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 180
+            $evalMs = [math]::Round($r.eval_duration / 1000000)
+            $smokeTps = if ($evalMs -gt 0) { [math]::Round($r.eval_count * 1000.0 / $evalMs, 2) } else { 0 }
+            Write-Ok ("Throughput: {0} tok/s  ({1} tokens in {2} ms)" -f $smokeTps, $r.eval_count, $evalMs)
+        } catch {
+            Write-Fail "Smoke test failed: $_"
+        }
     }
 }
 
