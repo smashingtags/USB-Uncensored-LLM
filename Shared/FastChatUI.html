@@ -465,16 +465,20 @@
   <button onclick="App.saveSettings()">Save</button>
 </aside>
 
-<aside class="drawer" id="models-drawer" style="display:none">
+<aside class="drawer" id="models-drawer" style="display:none;overflow-y:auto">
   <h2>Models</h2>
   <div id="models-installed" style="margin-bottom:16px">
     <h3 style="font-size:13px;color:var(--text-dim);margin:0 0 8px;text-transform:uppercase;letter-spacing:0.05em">Installed</h3>
     <div id="models-list" style="font-size:13px"></div>
   </div>
+  <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:16px">
+    <h3 style="font-size:13px;color:var(--text-dim);margin:0 0 8px;text-transform:uppercase;letter-spacing:0.05em">Available to install</h3>
+    <div id="catalog-list" style="font-size:13px"></div>
+  </div>
   <div style="border-top:1px solid var(--border);padding-top:12px">
-    <h3 style="font-size:13px;color:var(--text-dim);margin:0 0 8px;text-transform:uppercase;letter-spacing:0.05em">Pull a new model</h3>
+    <h3 style="font-size:13px;color:var(--text-dim);margin:0 0 8px;text-transform:uppercase;letter-spacing:0.05em">Custom model</h3>
     <div style="display:flex;gap:8px">
-      <input id="pull-model-input" type="text" placeholder="e.g. gemma2:2b or llama3.2:3b" style="flex:1;background:var(--panel);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px">
+      <input id="pull-model-input" type="text" placeholder="e.g. llava-phi3 or qwen2.5-vl:3b" style="flex:1;background:var(--panel);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px">
       <button onclick="App.pullModel()" style="background:var(--accent);color:#1a0f06;border:0;padding:6px 14px;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px">Pull</button>
     </div>
     <div id="pull-status" style="font-size:12px;color:var(--text-dim);margin-top:8px"></div>
@@ -855,26 +859,93 @@ const App = (() => {
 
   async function refreshModelsList() {
     const list = $('models-list');
+    const catList = $('catalog-list');
     list.innerHTML = '<span style="color:var(--text-faint)">Loading...</span>';
+    catList.innerHTML = '<span style="color:var(--text-faint)">Loading catalog...</span>';
+    let installedNames = [];
     try {
       const r = await fetch('/ollama/api/tags');
       if (!r.ok) throw new Error('engine offline');
       const j = await r.json();
       const models = j.models || [];
+      installedNames = models.map(m => (m.model || m.name || '').replace(/:latest$/, ''));
       if (models.length === 0) {
-        list.innerHTML = '<span style="color:var(--text-faint)">No models installed. Pull one below.</span>';
-        return;
+        list.innerHTML = '<span style="color:var(--text-faint)">No models installed yet.</span>';
+      } else {
+        list.innerHTML = models.map(m => {
+          const size = m.size ? (m.size / 1e9).toFixed(1) + ' GB' : '';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+            <div><span style="color:var(--text)">${m.model || m.name}</span> <span style="color:var(--text-faint);font-size:11px">${size}</span></div>
+            <button onclick="App.deleteModel('${m.model || m.name}')" style="background:transparent;border:1px solid var(--border);color:var(--danger);padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer">Remove</button>
+          </div>`;
+        }).join('');
       }
-      list.innerHTML = models.map(m => {
-        const size = m.size ? (m.size / 1e9).toFixed(1) + ' GB' : '';
-        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
-          <div><span style="color:var(--text)">${m.model || m.name}</span> <span style="color:var(--text-faint);font-size:11px">${size}</span></div>
-          <button onclick="App.deleteModel('${m.model || m.name}')" style="background:transparent;border:1px solid var(--border);color:var(--danger);padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer">Remove</button>
-        </div>`;
-      }).join('');
     } catch (e) {
-      list.innerHTML = `<span style="color:var(--danger)">Engine offline. Start the engine first.</span>`;
+      list.innerHTML = '<span style="color:var(--danger)">Engine offline. Start the engine first.</span>';
     }
+    // Fetch catalog and show models not yet installed
+    try {
+      const cr = await fetch('/api/catalog');
+      if (!cr.ok) throw new Error('no catalog');
+      const catalog = await cr.json();
+      const allModels = catalog.models || [];
+      const vision = catalog.vision_models_ollama_pull || [];
+      const available = allModels.filter(m => !installedNames.some(n => n === m.id || n.startsWith(m.id)));
+      let html = '';
+      if (available.length > 0) {
+        html += available.map(m => {
+          const badge = m.badge || '';
+          const caps = (m.capabilities || []).includes('embedding') ? ' (embedding)' : '';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+            <div style="flex:1;min-width:0">
+              <div style="color:var(--text);font-weight:500">${m.name}${caps}</div>
+              <div style="color:var(--text-faint);font-size:11px">${m.sizeLabel} &middot; ${badge}</div>
+            </div>
+            <button onclick="App.installCatalogModel('${m.id}')" style="background:var(--accent);color:#1a0f06;border:0;padding:4px 12px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">Install</button>
+          </div>`;
+        }).join('');
+      }
+      if (vision.length > 0) {
+        html += '<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Vision models</div></div>';
+        html += vision.filter(v => !installedNames.some(n => n === v.pull || n.startsWith(v.pull.split(':')[0]))).map(v => {
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+            <div style="flex:1;min-width:0">
+              <div style="color:var(--text);font-weight:500">${v.name}</div>
+              <div style="color:var(--text-faint);font-size:11px">${v.size} &middot; ${v.note}</div>
+            </div>
+            <button onclick="App.pullModelByName('${v.pull}')" style="background:var(--accent);color:#1a0f06;border:0;padding:4px 12px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">Install</button>
+          </div>`;
+        }).join('');
+      }
+      catList.innerHTML = html || '<span style="color:var(--text-faint)">All catalog models installed.</span>';
+    } catch (e) {
+      catList.innerHTML = '<span style="color:var(--text-faint)">Catalog not available.</span>';
+    }
+  }
+
+  async function installCatalogModel(id) {
+    const status = $('pull-status');
+    status.textContent = 'Installing ' + id + '... this may take a while (downloading model weights).';
+    status.style.color = 'var(--accent)';
+    try {
+      const r = await fetch('/ollama/api/pull', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: id, stream: false }),
+      });
+      if (!r.ok) throw new Error(await r.text().catch(() => 'pull failed'));
+      status.textContent = id + ' installed!';
+      renderModels();
+      refreshModelsList();
+    } catch (e) {
+      status.textContent = 'Install failed: ' + e.message;
+      status.style.color = 'var(--danger)';
+    }
+  }
+
+  function pullModelByName(name) {
+    $('pull-model-input').value = name;
+    pullModel();
   }
 
   async function pullModel() {
@@ -924,7 +995,7 @@ const App = (() => {
 
   init();
 
-  return { newChat, openChat, deleteChat, onModelChange, onKeydown, onSendOrStop, autoresize, openSettings, openModels, closeDrawers, saveSettings, toggleSidebar, pullModel, deleteModel };
+  return { newChat, openChat, deleteChat, onModelChange, onKeydown, onSendOrStop, autoresize, openSettings, openModels, closeDrawers, saveSettings, toggleSidebar, pullModel, pullModelByName, deleteModel, installCatalogModel };
 })();
 </script>
 </body>

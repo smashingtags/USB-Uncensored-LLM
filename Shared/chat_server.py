@@ -266,6 +266,10 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/settings":
             self._get_settings()
 
+        # Catalog API — serves the full model catalog for the UI to browse
+        elif path == "/api/catalog":
+            self._get_catalog()
+
         # Hardware stats API
         elif path == "/api/stats":
             self._get_stats()
@@ -349,6 +353,20 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
+
+    # ── Catalog ────────────────────────────────────────────────
+    def _get_catalog(self):
+        catalog_path = os.path.join(SCRIPT_DIR, "catalog.json")
+        try:
+            with open(catalog_path, "r", encoding="utf-8") as f:
+                data = f.read()
+        except FileNotFoundError:
+            data = '{"models":[]}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self._cors_headers()
+        self.end_headers()
+        self.wfile.write(data.encode("utf-8"))
 
     # ── Chat Persistence ───────────────────────────────────────
     def _get_chats(self):
