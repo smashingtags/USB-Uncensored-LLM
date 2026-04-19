@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 setlocal enabledelayedexpansion
 title Portable AI USB - Starting...
 
@@ -124,20 +124,16 @@ echo.
 echo   !CYAN!--- OPENROUTER SETUP ---!RESET!
 echo.
 set /p "USER_API_KEY=  Enter your OpenRouter API Key: "
-if "!USER_API_KEY!"=="" (
-    echo   !RED![ERROR] API Key cannot be empty!!RESET!
-    goto setup_openrouter
-)
+    if "!USER_API_KEY!"=="" echo   !RED![ERROR] API Key cannot be empty!!RESET!
+    if "!USER_API_KEY!"=="" goto setup_openrouter
 REM Mask key for display
 set "KEY_MASK=!USER_API_KEY:~0,6!****!USER_API_KEY:~-4!"
 echo   !DIM!Key: !KEY_MASK!!RESET!
 echo.
 echo   !YELLOW![~] Verifying API Key... Please wait...!RESET!
 powershell -NoProfile -Command "$headers = @{ 'Authorization' = 'Bearer !USER_API_KEY!' }; try { $response = Invoke-RestMethod -Uri 'https://openrouter.ai/api/v1/auth/key' -Headers $headers -ErrorAction Stop; exit 0 } catch { exit 1 }"
-if errorlevel 1 (
-    echo   !RED![ERROR] Invalid or expired OpenRouter API Key!!RESET!
-    goto setup_openrouter
-)
+    if errorlevel 1 echo   !RED![ERROR] Invalid or expired OpenRouter API Key!!RESET!
+    if errorlevel 1 goto setup_openrouter
 echo   !GREEN![OK] Key Verified!!RESET!
 echo.
 echo   Do you want to use !GREEN!Free!RESET! or !YELLOW!Paid!RESET! models?
@@ -180,10 +176,8 @@ if defined FREE_SEL (
         for %%V in (!FREE_SEL!) do set "USER_MODEL=!FREE_MODEL_%%V!"
     )
 )
-if "!USER_MODEL!"=="" (
-    echo   !RED![ERROR] Invalid selection. Please choose 1 to !FREE_MAX!.!RESET!
-    goto prompt_free_sel
-)
+    if "!USER_MODEL!"=="" echo   !RED![ERROR] Invalid selection. Please choose 1 to !FREE_MAX!.!RESET!
+    if "!USER_MODEL!"=="" goto prompt_free_sel
 goto save_settings_openrouter
 
 :setup_paid
@@ -214,10 +208,8 @@ if defined PAID_SEL (
         for %%V in (!PAID_SEL!) do set "USER_MODEL=!PAID_MODEL_%%V!"
     )
 )
-if "!USER_MODEL!"=="" (
-    echo   !RED![ERROR] Invalid selection. Please choose 1 to !PAID_MAX!.!RESET!
-    goto prompt_paid_sel
-)
+    if "!USER_MODEL!"=="" echo   !RED![ERROR] Invalid selection. Please choose 1 to !PAID_MAX!.!RESET!
+    if "!USER_MODEL!"=="" goto prompt_paid_sel
 goto save_settings_openrouter
 
 :save_settings_openrouter
@@ -242,19 +234,15 @@ echo.
 echo   !CYAN!--- NVIDIA NIM SETUP ---!RESET!
 echo.
 set /p "USER_API_KEY=  Enter your NVIDIA API Key: "
-if "!USER_API_KEY!"=="" (
-    echo   !RED![ERROR] API Key cannot be empty!!RESET!
-    goto setup_nvidia
-)
+    if "!USER_API_KEY!"=="" echo   !RED![ERROR] API Key cannot be empty!!RESET!
+    if "!USER_API_KEY!"=="" goto setup_nvidia
 set "KEY_MASK=!USER_API_KEY:~0,6!****!USER_API_KEY:~-4!"
 echo   !DIM!Key: !KEY_MASK!!RESET!
 echo.
 echo   !YELLOW![~] Verifying API Key... Please wait...!RESET!
 powershell -NoProfile -Command "$headers = @{ 'Authorization' = 'Bearer !USER_API_KEY!' }; try { $response = Invoke-RestMethod -Uri 'https://integrate.api.nvidia.com/v1/models' -Headers $headers -ErrorAction Stop; exit 0 } catch { exit 1 }"
-if errorlevel 1 (
-    echo   !RED![ERROR] Invalid or expired NVIDIA API Key!!RESET!
-    goto setup_nvidia
-)
+    if errorlevel 1 echo   !RED![ERROR] Invalid or expired NVIDIA API Key!!RESET!
+    if errorlevel 1 goto setup_nvidia
 echo   !GREEN![OK] Key Verified!!RESET!
 echo.
 echo   !CYAN!--- NVIDIA MODELS ---!RESET! !DIM!(Live + Curated)!RESET!
@@ -300,10 +288,8 @@ if defined MODEL_SEL (
         for %%V in (!MODEL_SEL!) do set "USER_MODEL=!NVIDIA_MODEL_%%V!"
     )
 )
-if "!USER_MODEL!"=="" (
-    echo   !RED![ERROR] Invalid selection. Please choose 1 to !MAX_IDX!.!RESET!
-    goto prompt_nvidia_sel
-)
+    if "!USER_MODEL!"=="" echo   !RED![ERROR] Invalid selection. Please choose 1 to !MAX_IDX!.!RESET!
+    if "!USER_MODEL!"=="" goto prompt_nvidia_sel
 
 :save_settings_nvidia
 (
@@ -324,19 +310,15 @@ echo.
 echo   !CYAN!--- GEMINI SETUP ---!RESET!
 echo.
 set /p "USER_API_KEY=  Enter your Gemini API Key: "
-if "!USER_API_KEY!"=="" (
-    echo   !RED![ERROR] API Key cannot be empty!!RESET!
-    goto setup_gemini
-)
+    if "!USER_API_KEY!"=="" echo   !RED![ERROR] API Key cannot be empty!!RESET!
+    if "!USER_API_KEY!"=="" goto setup_gemini
 set "KEY_MASK=!USER_API_KEY:~0,6!****!USER_API_KEY:~-4!"
 echo   !DIM!Key: !KEY_MASK!!RESET!
 echo.
 echo   !YELLOW![~] Verifying API Key... Please wait...!RESET!
 powershell -NoProfile -Command "try { $response = Invoke-RestMethod -Uri 'https://generativelanguage.googleapis.com/v1beta/models?key=!USER_API_KEY!' -ErrorAction Stop; exit 0 } catch { exit 1 }"
-if errorlevel 1 (
-    echo   !RED![ERROR] Invalid or expired Gemini API Key!!RESET!
-    goto setup_gemini
-)
+    if errorlevel 1 echo   !RED![ERROR] Invalid or expired Gemini API Key!!RESET!
+    if errorlevel 1 goto setup_gemini
 echo   !GREEN![OK] Key Verified!!RESET!
 echo.
 set /p "USER_MODEL=  Enter Model !DIM!(Enter for gemini-2.0-pro-exp-02-05)!RESET!: "
@@ -356,19 +338,15 @@ echo.
 echo   !CYAN!--- CLAUDE SETUP ---!RESET!
 echo.
 set /p "USER_API_KEY=  Enter your Anthropic API Key: "
-if "!USER_API_KEY!"=="" (
-    echo   !RED![ERROR] API Key cannot be empty!!RESET!
-    goto setup_claude
-)
+    if "!USER_API_KEY!"=="" echo   !RED![ERROR] API Key cannot be empty!!RESET!
+    if "!USER_API_KEY!"=="" goto setup_claude
 set "KEY_MASK=!USER_API_KEY:~0,6!****!USER_API_KEY:~-4!"
 echo   !DIM!Key: !KEY_MASK!!RESET!
 echo.
 echo   !YELLOW![~] Verifying API Key... Please wait...!RESET!
 powershell -NoProfile -Command "$headers = @{ 'x-api-key' = '!USER_API_KEY!'; 'anthropic-version' = '2023-06-01' }; try { $response = Invoke-RestMethod -Uri 'https://api.anthropic.com/v1/models' -Headers $headers -ErrorAction Stop; exit 0 } catch { exit 1 }"
-if errorlevel 1 (
-    echo   !RED![ERROR] Invalid or expired Anthropic API Key!!RESET!
-    goto setup_claude
-)
+    if errorlevel 1 echo   !RED![ERROR] Invalid or expired Anthropic API Key!!RESET!
+    if errorlevel 1 goto setup_claude
 echo   !GREEN![OK] Key Verified!!RESET!
 echo.
 set /p "USER_MODEL=  Enter Model !DIM!(Enter for claude-3-7-sonnet-20250219)!RESET!: "
@@ -419,19 +397,15 @@ echo.
 echo   !CYAN!--- OPENAI / CODEX SETUP ---!RESET!
 echo.
 set /p "USER_API_KEY=  Enter your OpenAI API Key: "
-if "!USER_API_KEY!"=="" (
-    echo   !RED![ERROR] API Key cannot be empty!!RESET!
-    goto setup_openai
-)
+    if "!USER_API_KEY!"=="" echo   !RED![ERROR] API Key cannot be empty!!RESET!
+    if "!USER_API_KEY!"=="" goto setup_openai
 set "KEY_MASK=!USER_API_KEY:~0,6!****!USER_API_KEY:~-4!"
 echo   !DIM!Key: !KEY_MASK!!RESET!
 echo.
 echo   !YELLOW![~] Verifying API Key... Please wait...!RESET!
 powershell -NoProfile -Command "$headers = @{ 'Authorization' = 'Bearer !USER_API_KEY!' }; try { $response = Invoke-RestMethod -Uri 'https://api.openai.com/v1/models' -Headers $headers -ErrorAction Stop; exit 0 } catch { exit 1 }"
-if errorlevel 1 (
-    echo   !RED![ERROR] Invalid or expired OpenAI API Key!!RESET!
-    goto setup_openai
-)
+    if errorlevel 1 echo   !RED![ERROR] Invalid or expired OpenAI API Key!!RESET!
+    if errorlevel 1 goto setup_openai
 echo   !GREEN![OK] Key Verified!!RESET!
 echo.
 set /p "USER_MODEL=  Enter Model !DIM!(Enter for gpt-4o)!RESET!: "
