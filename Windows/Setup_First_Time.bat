@@ -227,7 +227,20 @@ if /I "!PACK_TOOLS!"=="Y" (
             if not exist "%BIN_DIR%\python" mkdir "%BIN_DIR%\python"
             tar.exe -xf "%BIN_DIR%\python.zip" -C "%BIN_DIR%\python"
             del "%BIN_DIR%\python.zip" 2>nul
-            echo   !GREEN!  [OK] Portable Python installed!!RESET!
+            REM Enable pip in embeddable Python: uncomment 'import site' in the ._pth file
+            for %%P in ("%BIN_DIR%\python\python*._pth") do (
+                powershell -NoProfile -Command "(Get-Content '%%P') -replace '#import site','import site' | Set-Content '%%P'"
+            )
+            REM Bootstrap pip
+            echo   !DIM!      Installing pip...!RESET!
+            curl.exe -s -L -o "%BIN_DIR%\python\get-pip.py" "https://bootstrap.pypa.io/get-pip.py"
+            "%BIN_DIR%\python\python.exe" "%BIN_DIR%\python\get-pip.py" --no-warn-script-location >nul 2>&1
+            if exist "%BIN_DIR%\python\Scripts\pip.exe" (
+                echo   !GREEN!  [OK] Portable Python + pip installed!!RESET!
+            ) else (
+                echo   !GREEN!  [OK] Portable Python installed!!RESET!
+                echo   !YELLOW!      pip bootstrap failed - some tools may not install!RESET!
+            )
         )
     ) else (
         echo   !GREEN!  [b] Portable Python ... already installed [SKIP]!RESET!
