@@ -1,120 +1,192 @@
-# Eight.ly Stick
+# Portable AI + Code — The Ultimate USB Stick
 
-**Eight.ly Stick** is a zero-install, GPU-accelerated, portable AI environment. Plug it into any Windows, macOS, or Linux machine, double-click one file, and have an uncensored local LLM running on GPU in under a minute. Everything lives on the stick (or local drive); nothing is installed on the host, nothing leaves the machine.
+**Run powerful AI coding agents AND uncensored local chat from any computer — no installation required.** Plug in. Setup once. Code + chat from Windows, Mac, or Linux. Everything lives on the stick.
 
-Part of the Eight.ly product family. Runs equally well from a USB 3.0 stick, an external SSD, or a folder on your primary drive.
+---
 
-## Sister product: Nova on Eight.ly OS
+## What's on the stick
 
-The same catalog + engine architecture powers **Nova** — the AI assistant embedded in Eight.ly OS (the NAS operating system). Eight.ly Stick is the portable, ad-hoc variant for any host; Nova is the always-on, server-resident variant that shares persona and UX with NeuroHelper (iOS) and Eight.ly Professional. Both read the same catalog shape, both support the same engines, and both ship with the same hybrid Ollama + llama.cpp SYCL routing.
-
-- Stick URL: this repo (`smashingtags/USB-Uncensored-LLM`, branch `eightly-refactor`).
-- Nova URL: https://os-dev.eight.ly/nova (inside `smashingtags/eightly-os`).
-
-## Why Eight.ly Stick is different
-
-- **Real GPU acceleration.** Auto-detects Intel Arc, NVIDIA, AMD Radeon (incl. Strix Halo / Ryzen AI MAX iGPU), Apple Silicon, or CPU-only and pulls the right engine. On Intel Arc it uses Intel's IPEX-LLM Ollama (SYCL / Level Zero). On AMD it uses stock Ollama with ROCm, with a Vulkan llama.cpp sidecar for models Ollama's ROCm build doesn't yet support. Verified **4.86x speedup** on an Arc Pro B50 versus CPU (63 tok/s vs 13 tok/s on Gemma 2 2B).
-- **Verifies what it installs.** Old portable-LLM installers write model files and call it done. Eight.ly Stick calls `ollama create` and then checks the manifest is actually registered. If import fails, it tells you — it doesn't silently produce an empty registry.
-- **Port-isolated.** Runs the engine on `:11438` and the chat UI on `:3333`, so it never collides with an existing Ollama or WSL Ollama already on `:11434`.
-- **One file per platform.** Double-click `Windows\install.bat`, `Mac/install.command`, or `bash Linux/install.sh`. No prerequisites, no package manager.
-- **Diagnose button.** Every install ships a `diagnose` that prints your GPU, engine version, and runs a 100-token benchmark so you can *prove* acceleration is happening instead of hoping.
-
-## Verified performance
-
-| Host | Backend | Gemma 2 2B |
+| What | URL | What it does |
 |---|---|---|
-| Ryzen 9 3900X + Intel Arc Pro B50 (16 GB VRAM) | IPEX-LLM / SYCL | **63 tok/s** |
-| Ryzen 9 3900X, CPU only (baseline) | stock Ollama | 13 tok/s |
-| Apple M1 Pro (16 GB) | stock Ollama / Metal | **60 tok/s** |
-| AMD Radeon (RDNA 2/3/4) | stock Ollama / ROCm | auto-detected; benchmark with `diagnose.bat` |
-| Ryzen AI MAX+ 395 (Radeon 8060S, Strix Halo) | stock Ollama / ROCm (gfx1151) | runs 70B+ locally thanks to up to 96 GB of addressable unified memory |
+| **OpenClaude** (terminal + web dashboard) | `http://localhost:3000` | Open-source Claude-Code-style coding agent. Reads/writes files, runs shell commands, analyzes codebases. 6 AI providers. Normal + Limitless (autonomous) modes. |
+| **Uncensored Chat** (browser) | `http://localhost:3333` | GPU-accelerated local chat with abliterated models. Install + remove models from the UI. Drop files to attach. Slash commands (`/?`). |
+| **Portable VS Code** (optional) | Launch from `tools\vscode\Code.exe` | Full IDE with OpenClaude as the AI assistant. Extensions + settings travel with the stick. |
+
+All three share the same local engine (Ollama on `:11438`). Configure once on Windows — plug into Mac or Linux, everything works.
+
+---
 
 ## Quick start
 
-### Windows
-1. `Windows\install.bat` — picks GPU, downloads engine + models, verifies each registers
-2. `Windows\start.bat` — launches engine + chat UI
-3. Optional: `Windows\diagnose.bat` — proves GPU acceleration
+### Windows (first time)
+
+1. Double-click **`Windows\Setup_First_Time.bat`**
+2. Follow the prompts:
+   - Downloads Node.js + OpenClaude engine (~30 MB)
+   - Optionally installs portable Git + Python (~70 MB)
+   - Optionally installs GPU-accelerated local models (pick from menu)
+   - Optionally downloads VS Code Portable (~120 MB)
+3. Done. Run **`Windows\Start_AI.bat`** to launch.
+
+### Windows (every time after)
+
+- **`Windows\Start_AI.bat`** — launches OpenClaude in terminal + boots local engines + chat UI
+- **`Windows\Open_Dashboard.bat`** — opens the OpenClaude web dashboard at `http://localhost:3000`
+- **`Windows\Change_Model_or_Provider.bat`** — switch AI provider or model
+- **`Windows\Setup_Local_Models.bat`** — add more local GPU-accelerated models
 
 ### macOS
-1. `Mac/install.command`
-2. `Mac/start.command` (opens browser automatically)
+
+```bash
+cd Mac && bash setup.sh       # first time
+bash start_ai.sh              # every time
+bash open_dashboard.sh        # web dashboard
+```
 
 ### Linux
-1. `bash Linux/install.sh`
-2. `bash Linux/start.sh`
 
-### Android (Termux, CPU only)
-1. `bash Android/install.sh`
-2. `bash Android/start.sh`
+```bash
+cd Linux && bash setup_first_time.sh   # first time
+bash start_ai.sh                        # every time
+bash open_dashboard.sh                  # web dashboard
+```
 
-## Model catalog
+---
 
-Curated GGUFs, Q4_K_M quantization, all from trusted uploaders (bartowski, Mungert, HauhauCS, TrevorJS).
+## AI providers (for OpenClaude coding agent)
+
+| Provider | Free? | Setup |
+|---|---|---|
+| **NVIDIA NIM** | Free tier (1000 credits) | [build.nvidia.com](https://build.nvidia.com) |
+| **OpenRouter** | Free + paid models | [openrouter.ai](https://openrouter.ai) |
+| **Google Gemini** | Free tier | [aistudio.google.com](https://aistudio.google.com) |
+| **Anthropic Claude** | Paid | [console.anthropic.com](https://console.anthropic.com) |
+| **OpenAI** | Paid | [platform.openai.com](https://platform.openai.com) |
+| **Ollama (Local)** | Free + offline | Uses the GPU engine already on the stick — no internet needed |
+
+API keys live in `data/ai_settings.env` on the stick. Move the stick to another computer — your keys come with you.
+
+---
+
+## Local models (for uncensored chat + Ollama provider)
+
+GPU auto-detected at install. Pulls the right engine:
+
+| GPU | Backend |
+|---|---|
+| Intel Arc (Alchemist, Battlemage, Pro B50) | IPEX-LLM Ollama (SYCL). **63 tok/s verified.** |
+| NVIDIA (RTX/Quadro/GeForce) | Stock Ollama (CUDA) |
+| AMD Radeon (RDNA 2/3/4) | Stock Ollama (ROCm) |
+| AMD Strix Halo / Ryzen AI MAX+ | Stock Ollama (ROCm, gfx1151). **Up to 96 GB VRAM — runs 70B+ locally.** |
+| Apple Silicon | Stock Ollama (Metal). **60 tok/s on M1 Pro.** |
+| CPU fallback | Stock Ollama |
+
+### Curated model catalog
+
+**Chat (uncensored):**
 
 | Model | Size | Notes |
 |---|---|---|
-| Gemma 2 2B Abliterated | 1.6 GB | Recommended. Fast on any hardware. |
-| Phi-3.5 Mini 3.8B | 2.2 GB | Lightweight reasoning. |
-| Dolphin 2.9 Llama 3 8B | 4.9 GB | Balanced uncensored. |
-| Qwen3 8B Abliterated | 5.2 GB | Smart. Replaces the fake "Qwen 3.5" in the old repo. |
-| Gemma 3n E4B Abliterated (Huihui) | 4.2 GB | MatFormer architecture. |
-| Gemma 4 E2B TrevorJS abliterated | 3.2 GB | Apple Silicon (Metal/MLX) or Intel Arc (llama.cpp SYCL). |
-| Gemma 4 E2B HauhauCS Aggressive | 2.4 GB | Apple Silicon or Intel Arc. Multimodal-ready GGUF. |
-| Gemma 4 E4B HauhauCS Aggressive | 4.5 GB | Apple Silicon or Intel Arc. Multimodal (text/image/video/audio). |
-| Gemma 4 E4B TrevorJS abliterated | 4.5 GB | Apple Silicon or Intel Arc. Expert-granular abliteration. |
-| NemoMix Unleashed 12B | 7.5 GB | Heavyweight. Needs 16 GB RAM. |
+| Gemma 2 2B Abliterated | 1.6 GB | Recommended first install |
+| Phi-3.5 Mini 3.8B | 2.2 GB | Lightweight reasoning |
+| Dolphin 2.9 Llama 3 8B | 4.9 GB | Balanced |
+| Qwen3 8B Abliterated | 5.2 GB | Smart |
+| Gemma 3n E4B Abliterated | 4.2 GB | MatFormer |
+| Gemma 4 E2B (4 variants) | 2.4–4.5 GB | Apple Silicon / Intel Arc only |
+| NemoMix Unleashed 12B | 7.5 GB | Heavyweight |
 
-Gemma 4 routes through upstream **llama.cpp SYCL** on Intel Arc (auto-installed as a secondary engine) and through stock **Ollama v0.21's MLX runtime** on Apple Silicon. IPEX-LLM's Ollama fork doesn't yet ship the gemma4 architecture, so on Arc we load Gemma 4 via the llama.cpp sidecar at `:11441` and keep Ollama on `:11438` for everything else.
+**Code generation:**
+
+| Model | Size | Notes |
+|---|---|---|
+| Qwen2.5-Coder 7B | 4.4 GB | State-of-the-art 7B coder |
+| DeepSeek-Coder-V2 Lite | 10.4 GB | 16B MoE, fast |
+
+**Embeddings:**
+
+| Model | Size | Notes |
+|---|---|---|
+| Nomic Embed Text v1.5 | 140 MB | Semantic search + RAG |
+
+Install more models from the browser: open `http://localhost:3333`, click **Models**, type a model name, hit **Pull**.
+
+---
+
+## Cross-platform portability
+
+The `data/` folder is shared across all platforms:
+
+1. Set up your API key on **Windows**
+2. Plug the stick into a **Linux** box — settings already there
+3. Move to a **Mac** — same thing, zero reconfiguration
+
+Each OS only needs its own `bin/` folder (created by running setup on that platform).
+
+Environment variables `CLAUDE_CONFIG_DIR`, `XDG_CONFIG_HOME`, and `XDG_DATA_HOME` are all redirected to the stick so nothing leaks to the host.
+
+---
+
+## Privacy + security
+
+- **Zero footprint** — nothing written outside the stick
+- **API keys masked** in all display output
+- **Approval system** — Normal mode asks before writes/commands; Limitless skips
+- **No telemetry** — nothing sent anywhere except your chosen AI provider
+
+---
 
 ## Folder layout
 
 ```
-Eight.ly Stick/
-├── Windows/      install.bat, start.bat, diagnose.bat, install-core.ps1, diagnose.ps1
-├── Mac/          install.command, start.command
-├── Linux/        install.sh, start.sh
-├── Android/      install.sh, start.sh (Termux, CPU only)
-└── Shared/
-    ├── catalog.json         single source of truth for engines + models
-    ├── install-state.json   written by installer, read by launcher
-    ├── chat_server.py       HTTP + WebSocket proxy and static server
-    ├── FastChatUI.html      single-file SPA (dark, Eight.ly orange)
-    ├── chat_data/           your chats, settings (created on first run)
-    ├── models/              GGUFs + Modelfiles + Ollama registry
-    └── bin/<backend>/       the engine for the current host
-                             (windows-intel = IPEX-LLM, others = stock Ollama)
+Portable-AI/
+├── Windows/          Setup, Start, Dashboard, Models, Provider scripts
+├── Mac/              Same (bash)
+├── Linux/            Same (bash)
+├── Android/          Termux CPU-only (experimental)
+├── Shared/           Cross-platform runtime
+│   ├── catalog.json       Models + engines + backends
+│   ├── chat_server.py     Chat UI server (:3333)
+│   ├── FastChatUI.html    Browser chat interface
+│   ├── bin/<backend>/     GPU engines (Ollama variants)
+│   └── models/            GGUFs + Ollama registry
+├── dashboard/        OpenClaude web UI
+│   ├── server.mjs         Node.js agent server (:3000)
+│   └── index.html         Dashboard SPA
+├── data/             Portable config (shared across OS)
+│   ├── ai_settings.env    API keys + provider config
+│   └── chats/             Agent conversation history
+├── tools/            Optional bundled runtimes
+│   ├── vscode/            VS Code Portable (if installed)
+│   ├── node/              (in Windows\bin\ — OS-specific)
+│   └── git/               (in Windows\bin\ — OS-specific)
+└── README.md
 ```
-
-## Architecture decisions
-
-- **One engine per backend.** `Shared/bin/windows-intel/` holds IPEX-LLM Ollama with SYCL/Level Zero. `Shared/bin/windows-nvidia/` holds stock Ollama with CUDA. `Shared/bin/darwin-apple/` holds stock Ollama with Metal. A single stick can carry all three and the launcher picks the right one per host.
-- **Catalog-driven.** `Shared/catalog.json` is the source of truth. Installers read it; launchers read it for per-backend env vars; the UI reads it. Add a model by editing JSON.
-- **Hybrid engine routing.** Primary engine (Ollama) on `:11438`, optional llama.cpp SYCL sidecar on `:11441` for architectures Ollama doesn't yet support (e.g. Gemma 4 on Intel Arc). Chat server proxies both and translates OpenAI ↔ Ollama where needed.
-- **No hosted dependencies.** Engines come from `ollama/ollama` and `ipex-llm/ipex-llm` releases. Weights come from HuggingFace (bartowski/Mungert/HauhauCS/TrevorJS). No custom infra.
-
-## LAN mobile access
-
-Start it on your laptop, then on your phone hit `http://<laptop-ip>:3333`. The chat UI is mobile-responsive. If port 3333 is blocked by your firewall, allow inbound connections on 3333 locally.
-
-## Troubleshooting
-
-- **Slow on Windows + Arc.** Run `Windows\diagnose.bat`. If throughput is under 25 tok/s on Gemma 2B, your Arc driver is probably stale — update from <https://intel.com/arc-drivers> and rerun.
-- **"Engine offline" in the UI footer.** The chat server can't reach `:11438`. Either `start.bat` hasn't finished booting the engine yet, or an old engine process is wedged — run `taskkill /f /im ollama.exe` and rerun start.
-- **Gemma 4 fails to load.** On Intel Arc you need the llama.cpp sidecar installed (automatic when you pick a Gemma 4 model in the installer) and listening on `:11441` — check `diagnose.bat` or `netstat -ano | findstr 11441`. On macOS make sure Ollama is v0.21+; older versions predate the MLX Gemma 4 runtime.
-- **Port conflict on :11434 or :3333.** Eight.ly Stick deliberately uses `:11438` for the engine to avoid your existing Ollama install. If you have another chat UI on `:3333`, edit `start.bat`'s `ELY_CHAT_PORT`.
-
-## Credits
-
-- Forked from `TechJarves/USB-Uncensored-LLM` and refactored into Eight.ly Stick.
-- Intel IPEX-LLM team for the SYCL Ollama build.
-- bartowski, Mungert, HauhauCS, TrevorJS for the GGUFs.
-- Ollama team for the engine and the v0.21 MLX Gemma 4 runtime.
-
-## License
-
-MIT. See `LICENSE`.
 
 ---
 
-*Eight.ly Stick is uncompromising about computational freedom. The curated models are abliterated or aggressively uncensored — they won't moralize, lecture, or refuse. Use responsibly.*
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| "Node.js not found" | Run `Setup_First_Time` |
+| Engine offline in chat UI | Run `start.bat` first, or check `Windows\diagnose.bat` |
+| Slow on Intel Arc | Update driver: [intel.com/arc-drivers](https://intel.com/arc-drivers), rerun `diagnose.bat` |
+| Gemma 4 locks mid-thought | Pull latest `chat_server.py` from this repo (SSE buffer + reasoning fix) |
+| Port 3000/3333 in use | Another instance running, or another app on that port |
+| API key rejected | Verify at your provider's website |
+| Models not showing in chat | Engine not started. Run `start.bat`, then refresh browser. |
+| Can't install models from browser | Engine must be running. The Models panel calls Ollama's pull API. |
+
+---
+
+## Credits
+
+- OpenClaude engine by [@gitlawb](https://github.com/gitlawb/openclaude)
+- Original portable AI concept by [TechJarves](https://youtube.com/techjarves)
+- Intel IPEX-LLM team for the SYCL Ollama build
+- bartowski, Mungert, HauhauCS, TrevorJS, Nomic for the GGUFs
+- Ollama team for the engine
+
+## License
+
+MIT
