@@ -13,7 +13,7 @@ The same catalog + engine architecture powers **Nova** — the AI assistant embe
 
 ## Why Eight.ly Stick is different
 
-- **Real GPU acceleration.** Auto-detects Intel Arc, NVIDIA, Apple Silicon, or CPU-only and pulls the right engine. On Intel Arc it uses Intel's IPEX-LLM Ollama (SYCL / Level Zero). Verified **4.86x speedup** on an Arc Pro B50 versus CPU (63 tok/s vs 13 tok/s on Gemma 2 2B).
+- **Real GPU acceleration.** Auto-detects Intel Arc, NVIDIA, AMD Radeon (incl. Strix Halo / Ryzen AI MAX iGPU), Apple Silicon, or CPU-only and pulls the right engine. On Intel Arc it uses Intel's IPEX-LLM Ollama (SYCL / Level Zero). On AMD it uses stock Ollama with ROCm, with a Vulkan llama.cpp sidecar for models Ollama's ROCm build doesn't yet support. Verified **4.86x speedup** on an Arc Pro B50 versus CPU (63 tok/s vs 13 tok/s on Gemma 2 2B).
 - **Verifies what it installs.** Old portable-LLM installers write model files and call it done. Eight.ly Stick calls `ollama create` and then checks the manifest is actually registered. If import fails, it tells you — it doesn't silently produce an empty registry.
 - **Port-isolated.** Runs the engine on `:11438` and the chat UI on `:3333`, so it never collides with an existing Ollama or WSL Ollama already on `:11434`.
 - **One file per platform.** Double-click `Windows\install.bat`, `Mac/install.command`, or `bash Linux/install.sh`. No prerequisites, no package manager.
@@ -26,6 +26,8 @@ The same catalog + engine architecture powers **Nova** — the AI assistant embe
 | Ryzen 9 3900X + Intel Arc Pro B50 (16 GB VRAM) | IPEX-LLM / SYCL | **63 tok/s** |
 | Ryzen 9 3900X, CPU only (baseline) | stock Ollama | 13 tok/s |
 | Apple M1 Pro (16 GB) | stock Ollama / Metal | **60 tok/s** |
+| AMD Radeon (RDNA 2/3/4) | stock Ollama / ROCm | auto-detected; benchmark with `diagnose.bat` |
+| Ryzen AI MAX+ 395 (Radeon 8060S, Strix Halo) | stock Ollama / ROCm (gfx1151) | runs 70B+ locally thanks to up to 96 GB of addressable unified memory |
 
 ## Quick start
 

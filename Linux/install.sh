@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Eight.ly Stick - Linux installer (wrapper). Heavy lifting in Shared/install-lib.sh.
-# CPU-only for now. NVIDIA CUDA / Intel Arc (IPEX-LLM ubuntu) are planned.
+# Detects NVIDIA CUDA, AMD ROCm (incl. Strix Halo / Ryzen AI MAX iGPU), and
+# falls back to CPU. Ollama's Linux tarball is unified — the same binary
+# auto-detects CUDA or ROCm based on the libraries present on the host.
 
 set -u
 cd "$(dirname "${BASH_SOURCE[0]}")"
@@ -27,9 +29,44 @@ ely_step 1 "Detecting hardware"
 CPU_NAME=$(grep -m1 '^model name' /proc/cpuinfo 2>/dev/null | sed 's/^[^:]*: //' || echo 'unknown')
 BACKEND_KEY="linux-cpu"
 GPU_NAME="$CPU_NAME"
+
+# NVIDIA: nvidia-smi is the authoritative signal; it's only present when the
+# driver is installed and working.
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
+  BACKEND_KEY="linux-nvidia"
+  GPU_NAME=$(nvidia-smi -L 2>/dev/null | head -1 | sed 's/^GPU [0-9]*: //; s/ (UUID.*$//')
+else
+  # AMD: amdgpu module loaded + a Radeon/Strix device visible via lspci.
+  STRIX_HALO=0
+  if echo "$CPU_NAME" | grep -qE 'Ryzen AI MAX'; then
+    STRIX_HALO=1
+  fi
+  AMD_GPU=""
+  if command -v lspci >/dev/null 2>&1; then
+    AMD_GPU=$(lspci | grep -iE 'VGA|3D|Display' | grep -iE 'AMD|ATI|Radeon' | head -1 | sed 's/^[^:]*: //')
+  fi
+  AMDGPU_LOADED=0
+  lsmod 2>/dev/null | grep -q '^amdgpu' && AMDGPU_LOADED=1
+  if [[ -n "$AMD_GPU" && "$AMDGPU_LOADED" == "1" ]] || [[ "$STRIX_HALO" == "1" ]]; then
+    BACKEND_KEY="linux-amd"
+    if [[ "$STRIX_HALO" == "1" ]]; then
+      GPU_NAME="${AMD_GPU:-AMD Radeon (Strix Halo iGPU)}  (Ryzen AI MAX - up to ~96 GB VRAM, gfx1151)"
+    else
+      GPU_NAME="${AMD_GPU}"
+    fi
+    # Warn on missing ROCm libs — Ollama will run CPU even with amdgpu loaded if rocm-libs are absent.
+    if ! ldconfig -p 2>/dev/null | grep -q libamdhip64; then
+      ely_info "amdgpu is loaded but rocm-libs were not found — install rocm-libs to enable GPU inference."
+      ely_info "Ubuntu/Debian: sudo apt install rocm-libs. Strix Halo may need HSA_OVERRIDE_GFX_VERSION=11.5.1."
+    fi
+  fi
+fi
+
 export BACKEND_KEY GPU_NAME
 ely_ok "CPU: $CPU_NAME"
-ely_info "NOTE: Linux build is CPU-only in this release. GPU backends (CUDA, Intel Arc) coming."
+if [[ "$BACKEND_KEY" != "linux-cpu" ]]; then
+  ely_ok "GPU: $GPU_NAME"
+fi
 
 BACKEND_LABEL=$(ely_j "backends.$BACKEND_KEY.label")
 BACKEND_URL=$(  ely_j "backends.$BACKEND_KEY.url")
