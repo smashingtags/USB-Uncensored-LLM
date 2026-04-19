@@ -117,6 +117,27 @@ npm install @gitlawb/openclaude --no-audit --no-fund --loglevel=error
 echo -e "  ${GREEN}  [OK] OpenClaude engine installed!${RESET}"
 echo ""
 
+# ─── Local AI Models (GPU-accelerated uncensored chat) ───────
+echo ""
+echo -e "${CYAN}---------------------------------------------------------${RESET}"
+echo -e "  ${BOLD}Local AI Setup (GPU-accelerated uncensored models)${RESET}"
+echo -e "${CYAN}---------------------------------------------------------${RESET}"
+echo ""
+echo "  Installs a local GPU-accelerated AI engine and curated"
+echo "  uncensored models. Powers the chat UI at localhost:3333."
+echo ""
+read -p "  Install local AI models? (Y/N): " INSTALL_LOCAL
+if [[ "$INSTALL_LOCAL" =~ ^[Yy]$ ]]; then
+    echo ""
+    echo -e "  ${CYAN}[~] Running local model installer...${RESET}"
+    bash "$ROOT_DIR/Mac/install.command"
+    echo ""
+else
+    echo ""
+    echo -e "  ${DIM}Skipped. Install later from the chat UI or Mac/install.command.${RESET}"
+    echo ""
+fi
+
 # ─── Summary ─────────────────────────────────────────────────
 NODE_VER=$("$NODE_DIR/bin/node" -v 2>/dev/null || echo "unknown")
 OC_VER=$(grep '"version"' "$BIN_DIR/node_modules/@gitlawb/openclaude/package.json" 2>/dev/null | head -1 | sed 's/.*"\(.*\)".*/\1/' || echo "unknown")

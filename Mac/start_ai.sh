@@ -236,12 +236,23 @@ setup_ollama() {
     echo ""
     echo -e "  ${CYAN}--- OLLAMA LOCAL SETUP ---${RESET}"
     echo ""
-    read -p "  Enter local model (Enter for llama3.2:3b): " USER_MODEL
-    [ -z "$USER_MODEL" ] && USER_MODEL="llama3.2:3b"
+    OLLAMA_PORT=11434
+    SHARED_DIR="$ROOT_DIR/Shared"
+    LOCAL_STATE="$SHARED_DIR/install-state.json"
+    if [ -f "$LOCAL_STATE" ]; then
+        OLLAMA_PORT=11438
+        echo -e "  ${GREEN}[INFO] Using GPU-accelerated local engine on :11438${RESET}"
+        echo ""
+        echo -e "  ${BOLD}Installed local models:${RESET}"
+        python3 -c "import json; [print('    - '+m['name']+' ('+m['id']+')') for m in json.load(open('$LOCAL_STATE')).get('installed',[])]" 2>/dev/null
+        echo ""
+    fi
+    read -p "  Enter local model (Enter for gemma2-2b): " USER_MODEL
+    [ -z "$USER_MODEL" ] && USER_MODEL="gemma2-2b"
     save_env "AI_PROVIDER=ollama
 CLAUDE_CODE_USE_OPENAI=1
 OPENAI_API_KEY=ollama
-OPENAI_BASE_URL=http://localhost:11434/v1
+OPENAI_BASE_URL=http://localhost:${OLLAMA_PORT}/v1
 OPENAI_MODEL=${USER_MODEL}
 AI_DISPLAY_MODEL=${USER_MODEL}"
 }
@@ -384,6 +395,26 @@ else
     fi
 fi
 
+# ─── Boot Local Engines (if installed) ──────────────────
+SHARED_DIR="$ROOT_DIR/Shared"
+LOCAL_STATE="$SHARED_DIR/install-state.json"
+LOCAL_ENGINES_UP=0
+if [ -f "$LOCAL_STATE" ]; then
+    echo -e "  ${CYAN}[~] Booting local AI engines...${RESET}"
+    bash "$ROOT_DIR/Mac/start.command" &
+    LOCAL_PID=$!
+    sleep 5
+    LOCAL_ENGINES_UP=1
+    echo -e "  ${GREEN}[OK] Local engines starting (chat UI at http://localhost:3333)${RESET}"
+    echo ""
+fi
+
+if [ $LOCAL_ENGINES_UP -eq 1 ]; then
+    echo -e "  ${BOLD}Chat UI${RESET}  : ${GREEN}http://localhost:3333${RESET}  ${DIM}(uncensored local models)${RESET}"
+    echo -e "  ${BOLD}Dashboard${RESET}: ${GREEN}http://localhost:3000${RESET}  ${DIM}(OpenClaude web UI)${RESET}"
+    echo ""
+fi
+
 echo -e "  ${CYAN}[~] Starting AI Engine...${RESET}"
 echo ""
 
@@ -401,4 +432,12 @@ if [ -f "$OC_BIN" ]; then
     "$NODE_DIR/bin/node" "$BIN_DIR/node_modules/@gitlawb/openclaude/bin/openclaude" $PROVIDER_ARGS $CMD_ARGS
 else
     npx openclaude $PROVIDER_ARGS $CMD_ARGS
+fi
+
+# Cleanup local engines on exit
+if [ $LOCAL_ENGINES_UP -eq 1 ]; then
+    kill $LOCAL_PID 2>/dev/null
+    pkill -f 'ollama' 2>/dev/null
+    pkill -f 'llama-server' 2>/dev/null
+    pkill -f 'chat_server.py' 2>/dev/null
 fi
