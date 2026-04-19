@@ -83,16 +83,11 @@ if exist "%LOCAL_STATE%" (
     echo.
 )
 
-REM 4. Check for settings file
-if exist "%ENV_FILE%" (
-    findstr /C:"AI_PROVIDER=" "%ENV_FILE%" >nul
-    if errorlevel 1 (
-        echo   !YELLOW![INFO] Legacy configuration detected. Upgrading format...!RESET!
-        del "%ENV_FILE%"
-    ) else (
-        goto load_settings
-    )
-)
+REM 4. Check for settings file — NO goto from inside if() blocks
+set "SETTINGS_OK=0"
+if exist "%ENV_FILE%" findstr /C:"AI_PROVIDER=" "%ENV_FILE%" >nul 2>&1 && set "SETTINGS_OK=1"
+if "!SETTINGS_OK!"=="0" if exist "%ENV_FILE%" del "%ENV_FILE%"
+if "!SETTINGS_OK!"=="1" goto load_settings
 
 REM ---------------------------------------------------------
 REM   PROVIDER SELECTION MENU
