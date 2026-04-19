@@ -517,13 +517,27 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
 
         Buffers across reads — a single `data: {...}` line can span multiple
         socket reads. Split on \\n only AFTER accumulating, and keep the
-        trailing partial as the seed for the next iteration."""
+        trailing partial as the seed for the next iteration.
+
+        Gemma 4 (and other DeepSeek-style reasoners) may emit reasoning tokens
+        in `delta.reasoning_content` instead of (or alongside) `delta.content`,
+        even with `--reasoning-format none` — behavior varies by llama.cpp
+        build. We transcode both streams into a single `content` stream using
+        `<think>...</think>` markers that the UI already collapses. Without
+        this merge, thinking chunks that land only in reasoning_content get
+        silently dropped and the chat appears to hang mid-thought."""
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson")
         self._cors_headers()
         self.end_headers()
         buf = ""
         done = False
+        in_think = False  # True while we're inside an open <think> block
+
+        def emit(text):
+            self.wfile.write((json.dumps({"message": {"role": "assistant", "content": text}, "done": False}) + "\n").encode())
+            self.wfile.flush()
+
         while not done:
             chunk = resp.read(4096)
             if not chunk:
@@ -537,6 +551,9 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
                 data = line[6:].strip()
                 if data == "[DONE]":
                     try:
+                        if in_think:
+                            emit("</think>")
+                            in_think = False
                         self.wfile.write((json.dumps({"message": {"role": "assistant", "content": ""}, "done": True}) + "\n").encode())
                         self.wfile.flush()
                     except Exception as e:
@@ -552,12 +569,23 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
                 if not choices:
                     continue
                 delta = choices[0].get("delta", {})
-                piece = delta.get("content", "")
-                if not piece:
+                reasoning_piece = delta.get("reasoning_content") or ""
+                content_piece   = delta.get("content") or ""
+                if not reasoning_piece and not content_piece:
                     continue
                 try:
-                    self.wfile.write((json.dumps({"message": {"role": "assistant", "content": piece}, "done": False}) + "\n").encode())
-                    self.wfile.flush()
+                    # Reasoning first — open or continue a <think> block.
+                    if reasoning_piece:
+                        if not in_think:
+                            emit("<think>")
+                            in_think = True
+                        emit(reasoning_piece)
+                    # Content after reasoning — close the think block first.
+                    if content_piece:
+                        if in_think:
+                            emit("</think>")
+                            in_think = False
+                        emit(content_piece)
                 except Exception as e:
                     sys.stderr.write(f"[chat_server] stream write failed: {e}\n")
                     return
