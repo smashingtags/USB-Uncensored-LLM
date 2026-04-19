@@ -280,35 +280,50 @@ if exist "%VSCODE_DIR%\Code.exe" (
 set "INSTALL_VSCODE="
 set /p "INSTALL_VSCODE=  Install Portable VS Code? (~120MB download) (Y/N): "
 if defined INSTALL_VSCODE set "INSTALL_VSCODE=!INSTALL_VSCODE: =!"
-if /I "!INSTALL_VSCODE!"=="Y" (
-    echo.
-    echo   !CYAN![~] Downloading VS Code Portable...!RESET!
-    if not exist "%ROOT_DIR%tools" mkdir "%ROOT_DIR%tools"
-    set "VSCODE_ZIP=%ROOT_DIR%tools\_vscode.zip"
-    set "VSCODE_URL=https://update.code.visualstudio.com/latest/win32-x64-archive/stable"
-    set "DL_OK=0"
-    for /L %%R in (1,1,3) do (
-        if !DL_OK!==0 (
-            if %%R GTR 1 echo   !YELLOW!  Retry %%R/3...!RESET!
-            curl.exe -# -L -o "!VSCODE_ZIP!" "!VSCODE_URL!"
-            if not errorlevel 1 set "DL_OK=1"
-        )
-    )
+if /I "!INSTALL_VSCODE!"=="Y" goto do_vscode
+goto after_vscode
+:do_vscode
+echo.
+echo   !CYAN![~] Downloading VS Code Portable...!RESET!
+if not exist "%ROOT_DIR%tools" mkdir "%ROOT_DIR%tools"
+set "VSCODE_ZIP=%ROOT_DIR%tools\_vscode.zip"
+set "VSCODE_URL=https://update.code.visualstudio.com/latest/win32-x64-archive/stable"
+set "DL_OK=0"
+for /L %%R in (1,1,3) do (
     if !DL_OK!==0 (
-        echo   !RED!  [WARN] VS Code download failed. Skipping.!RESET!
-    ) else (
-        echo   !CYAN!  Extracting...!RESET!
-        if not exist "!VSCODE_DIR!" mkdir "!VSCODE_DIR!"
-        tar.exe -xf "!VSCODE_ZIP!" -C "!VSCODE_DIR!"
-        del "!VSCODE_ZIP!" 2>nul
-        REM Enable portable mode by creating the data folder
-        if not exist "!VSCODE_DIR!\data" mkdir "!VSCODE_DIR!\data"
-        if not exist "!VSCODE_DIR!\data\user-data" mkdir "!VSCODE_DIR!\data\user-data"
-        echo   !GREEN!  [OK] VS Code Portable installed!!RESET!
-        echo   !DIM!  Portable mode enabled (data\user-data on the stick).!RESET!
+        if %%R GTR 1 echo   !YELLOW!  Retry %%R/3...!RESET!
+        curl.exe -# -L -o "!VSCODE_ZIP!" "!VSCODE_URL!"
+        if not errorlevel 1 set "DL_OK=1"
     )
+)
+if !DL_OK!==0 (
+    echo   !RED!  [WARN] VS Code download failed. Skipping.!RESET!
+    goto after_vscode
+)
+echo   !CYAN!  Extracting (this takes a minute)...!RESET!
+if not exist "!VSCODE_DIR!" mkdir "!VSCODE_DIR!"
+REM Use PowerShell Expand-Archive instead of tar.exe — more reliable on Windows for large ZIPs
+powershell -NoProfile -Command "Expand-Archive -Path '!VSCODE_ZIP!' -DestinationPath '!VSCODE_DIR!' -Force"
+if errorlevel 1 (
+    echo   !RED!  [WARN] VS Code extraction failed. Skipping.!RESET!
+    goto after_vscode
+)
+del "!VSCODE_ZIP!" 2>nul
+REM Enable portable mode by creating the data folder
+if not exist "!VSCODE_DIR!\data" mkdir "!VSCODE_DIR!\data"
+if not exist "!VSCODE_DIR!\data\user-data" mkdir "!VSCODE_DIR!\data\user-data"
+echo   !GREEN!  [OK] VS Code Portable installed!!RESET!
+echo   !DIM!  Portable mode enabled (data\user-data on the stick).!RESET!
+echo.
+goto after_vscode_done
+
+:after_vscode
+if /I "!INSTALL_VSCODE!"=="N" (
     echo.
-) else if /I "!INSTALL_VSCODE!"=="N" (
+    echo   !DIM!Skipped VS Code. You can install it manually later.!RESET!
+    echo.
+)
+:after_vscode_done else if /I "!INSTALL_VSCODE!"=="N" (
     echo.
     echo   !DIM!Skipped VS Code. You can install it manually later.!RESET!
     echo.
