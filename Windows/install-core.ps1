@@ -51,14 +51,33 @@ $gpus = Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -and $_.Name -notmatch 'Parsec|Virtual|Microsoft Basic' }
 $backendKey = 'windows-cpu'
 $gpuName    = 'CPU (no discrete GPU detected)'
+
+# Detect Strix Halo / Ryzen AI MAX iGPU by CPU name — the iGPU shows up as
+# "AMD Radeon 8060S" or "AMD Radeon 880M" which we still catch in the AMD
+# branch below, but we'll label it explicitly when present.
+$cpuInfo = (Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1).Name
+$isStrixHalo = $cpuInfo -match 'Ryzen AI MAX'
+
 foreach ($g in $gpus) {
     if ($g.Name -match 'Intel.*Arc|Intel.*Iris Xe MAX|Intel.*Data Center GPU') {
         $backendKey = 'windows-intel'; $gpuName = $g.Name; break
     } elseif ($g.Name -match 'NVIDIA|GeForce|Quadro|RTX|GTX') {
         $backendKey = 'windows-nvidia'; $gpuName = $g.Name; break
     } elseif ($g.Name -match 'AMD|Radeon') {
-        $backendKey = 'windows-cpu'
-        $gpuName = $g.Name + '  (CPU fallback - Ollama AMD Windows support is limited)'
+        # Skip weak iGPUs that don't have enough compute for useful inference.
+        # Keep Strix Halo (Radeon 8060S / 890M / etc.) and all discrete Radeons.
+        if ($g.Name -match 'Radeon Graphics$' -and -not $isStrixHalo) {
+            $backendKey = 'windows-cpu'
+            $gpuName = $g.Name + '  (weak iGPU; using CPU)'
+        } else {
+            $backendKey = 'windows-amd'
+            if ($isStrixHalo) {
+                $gpuName = $g.Name + '  (Strix Halo / Ryzen AI MAX - up to ~96 GB VRAM, ROCm via gfx1151)'
+            } else {
+                $gpuName = $g.Name
+            }
+            break
+        }
     }
 }
 Write-Ok "GPU: $gpuName"
