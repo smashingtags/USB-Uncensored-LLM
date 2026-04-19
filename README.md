@@ -11,6 +11,67 @@ Runs from a USB 3.0 stick, external SSD, or a folder on your main drive.
 
 ---
 
+## Visual walkthrough
+
+### 1. The chat UI (`http://localhost:3333`) — empty first launch
+
+![Forge Chat empty](docs/screenshots/01-chat-empty.png)
+
+Left: a list of saved chats + `+ New chat`. Top-center: the model picker (populates once you've installed models). Bottom: the composer. Footer hint: **Enter to send · Shift+Enter newline · /? for commands · drop files to attach**. Engine status sits bottom-left.
+
+### 2. Slash commands (type `/?` in the composer)
+
+![Slash command preview](docs/screenshots/02-chat-slash.png)
+
+Typing `/?` and Enter pops a help alert listing every command: `/clear`, `/export`, `/model <id>`, `/code`, `/system <prompt>`, `/search <text>`. Commands never hit the model — they're handled locally. Full list in the Forge Chat section below.
+
+### 3. Drop a file onto the composer
+
+![Drag-over state](docs/screenshots/03-chat-dragover.png)
+
+The composer outlines in orange when a file is dragged over it. Release to attach.
+
+### 4. After drop — file inlined into the prompt
+
+![After drop](docs/screenshots/04-chat-after-drop.png)
+
+Small text-family files inline directly with a `--- filename ---` banner so the model knows per-file provenance. Binary docs (PDF, DOCX, DOC, RTF) are extracted server-side and their text is inlined the same way.
+
+### 5. Settings drawer
+
+![Chat settings](docs/screenshots/05-chat-settings.png)
+
+Set the system prompt that applies to new chats + the default temperature. Saved to `Shared/chat_data/settings.json` on the stick.
+
+---
+
+### 6. The agent dashboard (`http://localhost:3334`) — first launch
+
+![Forge Agent home](docs/screenshots/06-agent-home.png)
+
+This is the **OpenClaude** coding agent running portably from the stick. What you see:
+
+- **Left sidebar:** `+ New Conversation`, recent chat list, status strip (Provider / Model / Engine / Git / Python).
+- **Top bar:** `Chat` | `Setup` | `System` | `Actions` | `Updates`.
+- **Main:** quick-start prompts — *Capabilities · Write Code · Debug · Summarize*.
+- **Bottom-left:** mode toggle — **Normal** vs **Limitless** (fully-autonomous agentic mode; approve-once tools then go).
+- **Bottom-right:** **AGENT MODE** toggle — enables tool-use (read file, write file, run shell).
+- **Message box:** send coding tasks in natural language ("read README.md, summarize it, then write a short CONTRIBUTING.md based on the patterns you see").
+
+### 7. Configure providers (first-run: `Configure Now` banner)
+
+![Agent setup](docs/screenshots/07-agent-settings.png)
+
+Pick one (or more) AI providers:
+- **NVIDIA NIM** — free tier, no credit card, great for iteration
+- **OpenRouter** — hundreds of hosted models, pay-as-you-go
+- **Google Gemini / Anthropic Claude / OpenAI** — bring your own key
+- **Local Ollama** — uses the engine already running on `:11438` from this stick; no network needed
+
+Keys and settings live in `Shared/chat_data/agent/ai_settings.env` on the stick — move the stick, your config travels with it. The `Export` / `Import` buttons inside the agent UI let you back up / restore the config as a plain text file.
+
+---
+
 ## What you get after install
 
 Two web UIs, one runtime:

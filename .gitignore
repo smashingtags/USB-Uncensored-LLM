@@ -12,6 +12,7 @@ Shared/chat_data/
 # Ignore downloaded binaries and runtimes
 Shared/python/
 Shared/bin/
+Shared/tools/
 Shared/*.zip
 
 # Ignore Windows system files
