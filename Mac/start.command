@@ -1,81 +1,93 @@
-#!/bin/bash
-# ===================================================
-#  Portable AI - Fast Web Chat (Mac)
-# ===================================================
+#!/usr/bin/env bash
+# Eight.ly Stick - macOS launcher
+set -u
+cd "$(dirname "${BASH_SOURCE[0]}")"
+ROOT="$(cd .. && pwd)"
+SHARED="$ROOT/Shared"
+STATE="$SHARED/install-state.json"
+CATALOG="$SHARED/catalog.json"
 
-echo "==================================================="
-echo "    Portable AI - Fast Web Chat Mode (Mac)"
-echo "==================================================="
-echo ""
-echo "  Launches the AI engine + browser chat UI."
-echo "  All chats auto-save to the USB drive."
-echo ""
+echo
+echo "  ========================================================"
+echo "                     EIGHT.LY STICK"
+echo "  ========================================================"
+echo
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-USB_ROOT="$(dirname "$SCRIPT_DIR")"
-SHARED_DIR="$USB_ROOT/Shared"
-OLLAMA_RUNTIME="$SHARED_DIR/.ollama-runtime"
-mkdir -p "$OLLAMA_RUNTIME"
+if [[ ! -f "$STATE" ]]; then
+  echo "  No install detected."
+  echo "  Run Mac/install.command first to pick your models."
+  read -r -p "  Press Enter to close..." _
+  exit 1
+fi
 
-# ---- Full portability: keep EVERYTHING on the USB ----
-export OLLAMA_MODELS="$SHARED_DIR/models/ollama_data"
-export OLLAMA_HOME="$OLLAMA_RUNTIME"
-export OLLAMA_RUNNERS_DIR="$OLLAMA_RUNTIME/runners"
-export OLLAMA_TMPDIR="$OLLAMA_RUNTIME/tmp"
+BACKEND=$(python3 -c "import json; print(json.load(open('$STATE'))['backend'])")
+ENTRY_REL=$(python3 -c "import json; print(json.load(open('$STATE'))['entrypoint'])")
+BACKEND_LABEL=$(python3 -c "import json; print(json.load(open('$STATE'))['backendLabel'])")
+GPU=$(python3 -c "import json; print(json.load(open('$STATE'))['gpu'])")
+ENTRY="$ROOT/$ENTRY_REL"
+BACKEND_DIR="$SHARED/bin/$BACKEND"
+
+echo "  GPU:     $GPU"
+echo "  Backend: $BACKEND_LABEL"
+echo
+
+if [[ ! -x "$ENTRY" ]]; then
+  echo "  ERROR: engine missing at $ENTRY"
+  echo "  Re-run Mac/install.command to repair."
+  read -r -p "  Press Enter to close..." _
+  exit 2
+fi
+
+# Backend env from catalog
+eval "$(python3 -c "
+import json
+cat = json.load(open('$CATALOG'))
+for k,v in cat['backends']['$BACKEND']['env'].items():
+    print(f'export {k}={v!r}')
+")"
+
+export OLLAMA_MODELS="$SHARED/models/ollama_data"
+export OLLAMA_HOST="127.0.0.1:11438"
 export OLLAMA_ORIGINS="*"
-export OLLAMA_HOST="127.0.0.1:11434"
-mkdir -p "$OLLAMA_RUNTIME/runners" "$OLLAMA_RUNTIME/tmp"
-# -------------------------------------------------------
+export ELY_OLLAMA_URL="http://127.0.0.1:11438"
+export ELY_CHAT_PORT="3333"
 
-# Check if the portable Mac engine is downloaded
-if [ ! -f "$SHARED_DIR/bin/ollama-darwin" ]; then
-    echo "==================================================="
-    echo "  ERROR: Mac AI Engine Not Found!"
-    echo "==================================================="
-    echo ""
-    echo "  It looks like the AI engine hasn't been set up yet."
-    echo "  Please double-click 'install.command' in this Mac"
-    echo "  folder first to safely download the components!"
-    echo ""
-    read -n 1 -s -r -p "Press any key to continue..."
-    exit 1
-fi
-
-# Check if Ollama is already running
-if curl -s http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
-    echo "[OK] Ollama engine is already running!"
+if curl -s --max-time 2 http://127.0.0.1:11438/api/tags >/dev/null 2>&1; then
+  echo "  [OK] Engine already running on :11438."
 else
-    echo "Starting offline Mac AI Engine..."
-    HOME="$OLLAMA_RUNTIME" "$SHARED_DIR/bin/ollama-darwin" serve &
-    OLLAMA_PID=$!
-    
-    echo "Waiting for engine to initialize..."
-    until curl -s http://127.0.0.1:11434/api/tags > /dev/null 2>&1; do
-        sleep 1
-    done
-    echo "[OK] Engine is online!"
+  echo "  Starting engine on :11438..."
+  ( cd "$BACKEND_DIR" && "$ENTRY" serve >"$BACKEND_DIR/serve.log" 2>&1 ) &
+  ENGINE_PID=$!
+  for _ in {1..30}; do
+    if curl -s --max-time 2 http://127.0.0.1:11438/api/tags >/dev/null 2>&1; then break; fi
+    sleep 1
+  done
+  if ! curl -s --max-time 2 http://127.0.0.1:11438/api/tags >/dev/null 2>&1; then
+    echo "  ERROR: engine did not come up within 30s."
+    [[ -f "$BACKEND_DIR/serve.log" ]] && tail -n 20 "$BACKEND_DIR/serve.log"
+    read -r -p "  Press Enter to close..." _
+    exit 3
+  fi
+  echo "  [OK] Engine online."
 fi
 
-echo ""
-echo "==================================================="
-echo "  AI ENGINE IS RUNNING"
-echo "  Chat UI will open automatically."
-echo "  Press Ctrl+C to shut down."
-echo "==================================================="
-echo ""
+cleanup(){
+  echo
+  echo "  Shutting down engine..."
+  pkill -9 -f 'ollama' 2>/dev/null || true
+  echo "  Done."
+}
+trap cleanup EXIT INT TERM
 
-# Launch Python chat server using system Python (comes pre-installed on Mac)
-if command -v python3 &> /dev/null; then
-    python3 "$SHARED_DIR/chat_server.py"
-elif command -v python &> /dev/null; then
-    python "$SHARED_DIR/chat_server.py"
-else
-    echo "ERROR: Python not found. Please type 'brew install python' in terminal."
-    exit 1
-fi
+echo
+echo "  ========================================================"
+echo "     Eight.ly Stick is running."
+echo "     Chat UI:  http://localhost:3333"
+echo "     Close this Terminal window to shut down."
+echo "  ========================================================"
+echo
 
-# Cleanup
-if [ -n "$OLLAMA_PID" ]; then
-    kill -9 $OLLAMA_PID 2>/dev/null
-fi
-echo "Goodbye!"
+# Open the UI in the default browser (non-blocking)
+( sleep 1 && /usr/bin/open http://localhost:3333 ) >/dev/null 2>&1 &
+
+exec python3 "$SHARED/chat_server.py"

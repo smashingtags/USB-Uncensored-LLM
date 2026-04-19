@@ -1,145 +1,118 @@
-# USB-Uncensored-LLM ⚡
+# Eight.ly Stick
 
-**USB-Uncensored-LLM** is a fully air-gapped, zero-dependency, plug-and-play Local AI environment designed to run seamlessly from your **local hard drive** or a **portable USB/SSD**. It bypasses complex installations natively executing large language models directly on your hardware with no internet required.
+**Eight.ly Stick** is a zero-install, GPU-accelerated, portable AI environment. Plug it into any Windows, macOS, or Linux machine, double-click one file, and have an uncensored local LLM running on GPU in under a minute. Everything lives on the stick (or local drive); nothing is installed on the host, nothing leaves the machine.
 
-With a unified architecture, you can initialize your AI models once and choose to keep them on your system or carry them with you across Windows, macOS, and Linux PCs.
+Part of the Eight.ly product family. Runs equally well from a USB 3.0 stick, an external SSD, or a folder on your primary drive.
 
-🎥 **Watch the Setup & Demo Video:** [https://youtu.be/60PSXsoXc8A](https://youtu.be/60PSXsoXc8A)
+## Sister product: Nova on Eight.ly OS
 
-[![USB-Uncensored-LLM Setup & Demo](https://img.youtube.com/vi/60PSXsoXc8A/maxresdefault.jpg)](https://youtu.be/60PSXsoXc8A)
+The same catalog + engine architecture powers **Nova** — the AI assistant embedded in Eight.ly OS (the NAS operating system). Eight.ly Stick is the portable, ad-hoc variant for any host; Nova is the always-on, server-resident variant that shares persona and UX with NeuroHelper (iOS) and Eight.ly Professional. Both read the same catalog shape, both support the same engines, and both ship with the same hybrid Ollama + llama.cpp SYCL routing.
 
-## 🚀 Core Features
-* **Zero Dependency Setup:** Ships with portable Python and isolated engine binaries. No system permissions, registry edits, or package managers required.
-* **Cross-Platform Interoperability:** Uses a intelligent `Shared` volume system — download your 5GB+ AI models *once*, and use them natively on Windows, macOS, and Linux without duplication.
-* **Censorship Free:** Integrates cutting-edge ablative and heretic fine-tuned models for completely unfiltered interactions.
-* **Network Proxied UI:** The custom Python HTTP server instantly serves a blazing-fast dark mode UI. You can access the AI from your phone or tablet on the same WiFi network without complex CORS configuration.
-* **Hardware Accelerated:** Uses a custom-compiled Ollama engine under the hood, natively capitalizing on AVX CPU instructions, NVIDIA CUDA, or Apple Metal GPU accelerators dynamically when plugged into different host machines.
+- Stick URL: this repo (`smashingtags/USB-Uncensored-LLM`, branch `eightly-refactor`).
+- Nova URL: https://os-dev.eight.ly/nova (inside `smashingtags/eightly-os`).
 
----
+## Why Eight.ly Stick is different
 
-## 💻 System Requirements
-Before preparing your drive, ensure you have:
-- **Storage:** A USB 3.0+ flash drive or SSD with an absolute minimum of **8 GB** free space (16 GB is **highly** recommended).
-- **RAM:** The host computer should have at least **8 GB of system memory** to run the 2B/4B models, and **16 GB of memory** to fluidly run the 9B/12B models.
+- **Real GPU acceleration.** Auto-detects Intel Arc, NVIDIA, Apple Silicon, or CPU-only and pulls the right engine. On Intel Arc it uses Intel's IPEX-LLM Ollama (SYCL / Level Zero). Verified **4.86x speedup** on an Arc Pro B50 versus CPU (63 tok/s vs 13 tok/s on Gemma 2 2B).
+- **Verifies what it installs.** Old portable-LLM installers write model files and call it done. Eight.ly Stick calls `ollama create` and then checks the manifest is actually registered. If import fails, it tells you — it doesn't silently produce an empty registry.
+- **Port-isolated.** Runs the engine on `:11438` and the chat UI on `:3333`, so it never collides with an existing Ollama or WSL Ollama already on `:11434`.
+- **One file per platform.** Double-click `Windows\install.bat`, `Mac/install.command`, or `bash Linux/install.sh`. No prerequisites, no package manager.
+- **Diagnose button.** Every install ships a `diagnose` that prints your GPU, engine version, and runs a 100-token benchmark so you can *prove* acceleration is happening instead of hoping.
 
----
+## Verified performance
 
-## 📂 Folder Architecture
+| Host | Backend | Gemma 2 2B |
+|---|---|---|
+| Ryzen 9 3900X + Intel Arc Pro B50 (16 GB VRAM) | IPEX-LLM / SYCL | **63 tok/s** |
+| Ryzen 9 3900X, CPU only (baseline) | stock Ollama | 13 tok/s |
+| Apple M1 Pro (16 GB) | stock Ollama / Metal | **60 tok/s** |
 
-The project is structured to strictly isolate operating system executables while securely unifying heavy model weights to save precious portable storage capacity.
+## Quick start
 
-```text
-[Portable USB Drive]
- ├── 📁 Android    # Native Android (Termux) installers & launchers
- ├── 📁 Linux      # Native Ubuntu/Debian offline installers & launchers
- ├── 📁 Mac        # Native macOS offline installers & launchers
- ├── 📁 Windows    # Native Windows offline automatic UI menus
- └── 📁 Shared     # Unified Data System
-      ├── 📁 bin         (Holds isolated executables: ollama-windows.exe, ollama-darwin...)
-      ├── 📁 chat_data   (Houses cross-platform persistent conversation history)
-      ├── 📁 models      (HuggingFace GGUF Weights & local database mapping)
-      └── 📁 python      (Isolated portable python environment)
+### Windows
+1. `Windows\install.bat` — picks GPU, downloads engine + models, verifies each registers
+2. `Windows\start.bat` — launches engine + chat UI
+3. Optional: `Windows\diagnose.bat` — proves GPU acceleration
+
+### macOS
+1. `Mac/install.command`
+2. `Mac/start.command` (opens browser automatically)
+
+### Linux
+1. `bash Linux/install.sh`
+2. `bash Linux/start.sh`
+
+### Android (Termux, CPU only)
+1. `bash Android/install.sh`
+2. `bash Android/start.sh`
+
+## Model catalog
+
+Curated GGUFs, Q4_K_M quantization, all from trusted uploaders (bartowski, Mungert, HauhauCS, TrevorJS).
+
+| Model | Size | Notes |
+|---|---|---|
+| Gemma 2 2B Abliterated | 1.6 GB | Recommended. Fast on any hardware. |
+| Phi-3.5 Mini 3.8B | 2.2 GB | Lightweight reasoning. |
+| Dolphin 2.9 Llama 3 8B | 4.9 GB | Balanced uncensored. |
+| Qwen3 8B Abliterated | 5.2 GB | Smart. Replaces the fake "Qwen 3.5" in the old repo. |
+| Gemma 3n E4B Abliterated (Huihui) | 4.2 GB | MatFormer architecture. |
+| Gemma 4 E2B TrevorJS abliterated | 3.2 GB | Apple Silicon (Metal/MLX) or Intel Arc (llama.cpp SYCL). |
+| Gemma 4 E2B HauhauCS Aggressive | 2.4 GB | Apple Silicon or Intel Arc. Multimodal-ready GGUF. |
+| Gemma 4 E4B HauhauCS Aggressive | 4.5 GB | Apple Silicon or Intel Arc. Multimodal (text/image/video/audio). |
+| Gemma 4 E4B TrevorJS abliterated | 4.5 GB | Apple Silicon or Intel Arc. Expert-granular abliteration. |
+| NemoMix Unleashed 12B | 7.5 GB | Heavyweight. Needs 16 GB RAM. |
+
+Gemma 4 routes through upstream **llama.cpp SYCL** on Intel Arc (auto-installed as a secondary engine) and through stock **Ollama v0.21's MLX runtime** on Apple Silicon. IPEX-LLM's Ollama fork doesn't yet ship the gemma4 architecture, so on Arc we load Gemma 4 via the llama.cpp sidecar at `:11441` and keep Ollama on `:11438` for everything else.
+
+## Folder layout
+
+```
+Eight.ly Stick/
+├── Windows/      install.bat, start.bat, diagnose.bat, install-core.ps1, diagnose.ps1
+├── Mac/          install.command, start.command
+├── Linux/        install.sh, start.sh
+├── Android/      install.sh, start.sh (Termux, CPU only)
+└── Shared/
+    ├── catalog.json         single source of truth for engines + models
+    ├── install-state.json   written by installer, read by launcher
+    ├── chat_server.py       HTTP + WebSocket proxy and static server
+    ├── FastChatUI.html      single-file SPA (dark, Eight.ly orange)
+    ├── chat_data/           your chats, settings (created on first run)
+    ├── models/              GGUFs + Modelfiles + Ollama registry
+    └── bin/<backend>/       the engine for the current host
+                             (windows-intel = IPEX-LLM, others = stock Ollama)
 ```
 
----
+## Architecture decisions
 
-## 🧠 Curated AI Model Library
+- **One engine per backend.** `Shared/bin/windows-intel/` holds IPEX-LLM Ollama with SYCL/Level Zero. `Shared/bin/windows-nvidia/` holds stock Ollama with CUDA. `Shared/bin/darwin-apple/` holds stock Ollama with Metal. A single stick can carry all three and the launcher picks the right one per host.
+- **Catalog-driven.** `Shared/catalog.json` is the source of truth. Installers read it; launchers read it for per-backend env vars; the UI reads it. Add a model by editing JSON.
+- **Hybrid engine routing.** Primary engine (Ollama) on `:11438`, optional llama.cpp SYCL sidecar on `:11441` for architectures Ollama doesn't yet support (e.g. Gemma 4 on Intel Arc). Chat server proxies both and translates OpenAI ↔ Ollama where needed.
+- **No hosted dependencies.** Engines come from `ollama/ollama` and `ipex-llm/ipex-llm` releases. Weights come from HuggingFace (bartowski/Mungert/HauhauCS/TrevorJS). No custom infra.
 
-This USB ships with a curated installer for the highest-quality, locally operable uncensored models available on the open-source market today:
+## LAN mobile access
 
-1. **Gemma 2 2B Abliterated (~1.6 GB)**: *Recommended for all.* Extremely fast, incredibly smart for its size, with safety alignment vectors mathematically purged.
-2. **Gemma 4 E4B Ultra Uncensored Heretic (~5.34 GB)**: A "heretic" fine-tune that aggressively forces compliance to all user queries regardless of content or legality.
-3. **Qwen 3.5 9B Uncensored Aggressive (~5.2 GB)**: A much larger, incredibly competent reasoning model with a strict adherence to raw, unbiased answers.
-4. **Custom Models**: The installer supports downloading *any* .gguf weight directly from HuggingFace natively into the USB's engine.
+Start it on your laptop, then on your phone hit `http://<laptop-ip>:3333`. The chat UI is mobile-responsive. If port 3333 is blocked by your firewall, allow inbound connections on 3333 locally.
 
----
+## Troubleshooting
 
-## ⚙️ Quick Start Guide
+- **Slow on Windows + Arc.** Run `Windows\diagnose.bat`. If throughput is under 25 tok/s on Gemma 2B, your Arc driver is probably stale — update from <https://intel.com/arc-drivers> and rerun.
+- **"Engine offline" in the UI footer.** The chat server can't reach `:11438`. Either `start.bat` hasn't finished booting the engine yet, or an old engine process is wedged — run `taskkill /f /im ollama.exe` and rerun start.
+- **Gemma 4 fails to load.** On Intel Arc you need the llama.cpp sidecar installed (automatic when you pick a Gemma 4 model in the installer) and listening on `:11441` — check `diagnose.bat` or `netstat -ano | findstr 11441`. On macOS make sure Ollama is v0.21+; older versions predate the MLX Gemma 4 runtime.
+- **Port conflict on :11434 or :3333.** Eight.ly Stick deliberately uses `:11438` for the engine to avoid your existing Ollama install. If you have another chat UI on `:3333`, edit `start.bat`'s `ELY_CHAT_PORT`.
 
-### Step 1: Initialize the Engine
-Depending on the computer you are currently plugged into, navigate into the respective Operating System folder and double-click/run the install script. 
-* **Windows:** Double-click `Windows/install.bat`
-* **macOS:** Open Terminal, drag in `Mac/install.command`, and press Enter.
-* **Linux:** Run `bash Linux/install.sh`
-* **Android:** Open Termux, run `bash Android/install.sh` (see Android section below)
+## Credits
 
-> **Note:** Initializing simply downloads the tiny 50MB execution engine specific to that computer to the `Shared/bin` folder. 
+- Forked from `TechJarves/USB-Uncensored-LLM` and refactored into Eight.ly Stick.
+- Intel IPEX-LLM team for the SYCL Ollama build.
+- bartowski, Mungert, HauhauCS, TrevorJS for the GGUFs.
+- Ollama team for the engine and the v0.21 MLX Gemma 4 runtime.
 
-### Step 2: Download AI Models 
-It is highly recommended to run the model download phase via a **Windows PC** (`Windows/install.bat`), which provides an interactive, terminal-based catalog to easily select and download highly curated, uncensored GGUF Models. 
-*(If you do not have a Windows PC, simply download your `.gguf` weights from HuggingFace and place them into the `Shared/models` folder manually).*
+## License
 
-### Step 3: Launch
-Open the respective OS folder and run the `start` script:
-* **Windows:** `Windows/start-fast-chat.bat`
-* **macOS:** `Mac/start.command`
-* **Linux:** `bash Linux/start.sh`
-* **Android:** `bash Android/start.sh` (in Termux)
-
-The engine will spin up securely in the background, and your default web browser will automatically open the locally-served Chat UI.
+MIT. See `LICENSE`.
 
 ---
 
-## 🏠 Local Disk Installation
-While this project is optimized for USB portability, it works beautifully as a lightweight local AI setup on your primary computer.
-
-**How to Install Locally:**
-1.  **Download/Clone** this repository to a folder on your `C:\` or `D:\` drive.
-2.  Navigate to the **Windows** (or Mac/Linux) folder.
-3.  Run **`install.bat`** and choose your desired models.
-4.  The system will download everything into that local folder. 
-5.  Run **`start-fast-chat.bat`** to begin.
-
-*Benefit:* Running from an internal SSD is significantly faster than a USB drive, resulting in near-instant AI model loading!
-
----
-
-## 📱 Android Native (Termux)
-Run the AI engine **directly on your Android phone or tablet** — no PC required!
-
-### Requirements
-- **Termux** installed from [F-Droid](https://f-droid.org/en/packages/com.termux/) (NOT the Play Store — it's outdated)
-- **6 GB+ RAM** (8 GB+ recommended). Only the 2B model runs well on 6 GB devices.
-- **WiFi or mobile data** for initial setup (downloading engine + models)
-- **ARM64 processor** (virtually all modern Android phones/tablets)
-
-### Setup
-1. Copy the USB-Uncensored-LLM folder to your Android device (via USB OTG, file transfer, or `git clone`)
-2. Open **Termux** and navigate to the project folder
-3. Run: `bash Android/install.sh`
-4. Select your model (Gemma 2 2B recommended for most Android devices)
-5. Wait for downloads to complete — **keep Termux in the foreground!**
-
-### Launch
-```bash
-bash Android/start.sh
-```
-The AI engine starts and Chrome opens automatically with the chat UI.
-
-### Android Performance Tips
-- **Run `termux-wake-lock`** before starting — prevents Android from killing the process
-- **Keep Termux in the foreground** for best performance
-- **Close other apps** to free RAM for the AI model
-- **Use the 2B model** on devices with less than 12 GB RAM
-- **Plug in your charger** — LLM inference drains battery fast
-- Expect **~3-10 tokens/sec** on the 2B model (vs 30-50+ on a PC with GPU)
-
----
-
-## 📱 LAN Mobile Access
-If you want to use the Heavyweight AI from your phone while lounging on the couch:
-1. Ensure your PC running the `start` script and your phone are on the exact same WiFi network.
-2. The terminal window will automatically detect your host machine and display a **Network Access** IP Address (e.g., `http://192.168.1.15:3333`).
-3. Simply type that URL into your mobile browser (Safari/Chrome). The custom Python server perfectly routes mobile queries directly to the USB! *(Note: If pages do not load, ensure Windows Firewall allows incoming connections on port `3333`)*.
-
----
-
-## 🛠️ Troubleshooting
-
-- **The script instantly closes on Windows:** You likely have the legacy Windows App Execution Aliases turned on, which tricks the OS. Run the script via a command prompt, or right-click the `.bat` file and "Run as Administrator".
-- **"Ollama Engine Not Found":** You attempted to run the `start` script before the `install` script downloaded the base software for your specific OS. Run your OS's installer!
-- **Slow Generation Speeds:** Your model is too large for your host PC's RAM. Re-run `install.bat` and select the **Gemma 2 2B Abliterated** model, which runs rapidly even on older machines.
-
----
-> *Disclaimer: USB-Uncensored-LLM is built for uncompromising computational freedom. By utilizing ablative models, the system will not moralize, lecture, or refuse your prompts. Please use responsibly.*
-# USB-Uncensored-LLM
+*Eight.ly Stick is uncompromising about computational freedom. The curated models are abliterated or aggressively uncensored — they won't moralize, lecture, or refuse. Use responsibly.*

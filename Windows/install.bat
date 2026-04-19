@@ -1,31 +1,36 @@
 @echo off
-title Portable AI - Setup
-color 0E
+setlocal
+title Eight.ly Stick - Setup
 
-echo ===================================================
-echo     PORTABLE AI - USB SETUP
-echo ===================================================
+cls
 echo.
-echo  This will download and configure AI models onto
-echo  your USB drive. You'll get to CHOOSE which models
-echo  to install from a curated list.
+echo   ========================================================
+echo                   EIGHT.LY STICK - SETUP
+echo   ========================================================
 echo.
-echo   - 6 preset models (uncensored + standard)
-echo   - Custom model support (bring your own GGUF)
-echo   - Minimum USB space: 8 GB (16 GB recommended)
+echo      Portable uncensored AI, GPU-accelerated, zero-install.
+echo      This will auto-detect your hardware, download the right
+echo      engine, and let you pick which AI models to install.
 echo.
-echo  Make sure you have a good internet connection!
+echo      Minimum:   8 GB free disk
+echo      Heavy:    32 GB free disk  (full model catalog)
+echo.
+echo   --------------------------------------------------------
 echo.
 pause
 
-:: Run the PowerShell setup script from the same folder as this bat file
-powershell -ExecutionPolicy Bypass -File "%~dp0install-core.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-core.ps1"
+set RC=%ERRORLEVEL%
 
 echo.
-echo ===================================================
-echo     SETUP COMPLETE! You're ready to go!
-echo ===================================================
-echo.
-echo  To start: double-click start-fast-chat.bat
+if %RC%==0 (
+  echo   ========================================================
+  echo      SETUP COMPLETE.  Double-click start.bat to launch.
+  echo   ========================================================
+) else (
+  echo   ========================================================
+  echo      Setup exited with errors ^(code %RC%^).  Scroll up.
+  echo   ========================================================
+)
 echo.
 pause

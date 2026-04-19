@@ -31,9 +31,16 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-# ── Configuration ──────────────────────────────────────────────
-CHAT_SERVER_PORT = 3333
-OLLAMA_HOST = "http://127.0.0.1:11434"
+# Configuration
+# Eight.ly Stick runs Ollama on :11438 by default. For models whose architecture
+# isn't in our Ollama build yet (Gemma 4 on Intel Arc), a secondary llama.cpp
+# server runs on :11441 and we route per-model.
+CHAT_SERVER_PORT    = int(os.environ.get("ELY_CHAT_PORT", "3333"))
+OLLAMA_HOST         = os.environ.get("ELY_OLLAMA_URL",   "http://127.0.0.1:11438")
+LLAMACPP_HOST       = os.environ.get("ELY_LLAMACPP_URL", "").strip()
+LLAMACPP_MODEL_ID   = os.environ.get("ELY_LLAMACPP_MODEL_ID", "").strip()
+
+# Legacy --llama-cpp flag kept for back-compat: forces all traffic through llama.cpp
 LLAMA_CPP_MODE = "--llama-cpp" in sys.argv
 if LLAMA_CPP_MODE:
     OLLAMA_HOST = "http://127.0.0.1:8080"
@@ -372,121 +379,203 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"error": str(e)}).encode())
 
-    # ── Ollama Proxy (streaming-aware) ─────────────────────────
+    # ── Ollama Proxy (streaming-aware, hybrid-routing) ─────────
     def _proxy_ollama(self, method):
-        """
-        Proxy requests from /ollama/* to the local Ollama engine.
-        Supports streaming responses for /api/chat and /api/generate.
-        """
-        # Strip the /ollama prefix to get the real Ollama path
+        """Top-level router. Picks a handler per path + routing decision."""
         ollama_path = self.path[len("/ollama"):]
-        target_url = OLLAMA_HOST + ollama_path
-
-        # Read request body if present
         body = None
-        content_length = int(self.headers.get("Content-Length", 0))
-        if content_length > 0:
-            body = self.rfile.read(content_length)
+        n = int(self.headers.get("Content-Length", 0))
+        if n > 0:
+            body = self.rfile.read(n)
 
         try:
-            # Handle fake /api/tags for llama.cpp mode
-            if LLAMA_CPP_MODE and ollama_path == "/api/tags":
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self._cors_headers()
-                self.end_headers()
-                self.wfile.write(json.dumps({"models":[{"name": "local-llama-model"}]}).encode())
-                return
+            # --- /api/tags: three flavors (legacy llama.cpp, hybrid, pure Ollama)
+            if ollama_path == "/api/tags":
+                if LLAMA_CPP_MODE:
+                    return self._respond_json({"models": [{"name": "local-llama-model"}]})
+                if LLAMACPP_HOST and LLAMACPP_MODEL_ID:
+                    return self._handle_hybrid_tags()
+                return self._proxy_passthrough(method, OLLAMA_HOST + ollama_path, body, is_stream=False)
 
-            if LLAMA_CPP_MODE and ollama_path == "/api/chat":
-                # Translate Ollama payload -> OpenAI payload for llama-server
-                ollama_req = json.loads(body) if body else {}
-                openai_req = {
-                    "messages": ollama_req.get("messages", []),
-                    "stream": True,
-                    "temperature": ollama_req.get("options", {}).get("temperature", 0.7)
-                }
-                target_url = OLLAMA_HOST + "/v1/chat/completions"
-                body = json.dumps(openai_req).encode()
+            # --- /api/chat + /api/generate: route per-model to llama.cpp or Ollama
+            if ollama_path in ("/api/chat", "/api/generate"):
+                if self._should_route_to_llamacpp(body):
+                    return self._handle_llamacpp_chat(body)
+                return self._proxy_passthrough(
+                    method, OLLAMA_HOST + ollama_path, body,
+                    is_stream=True,
+                )
 
-            req = urllib.request.Request(
-                target_url,
-                data=body,
-                method=method,
-                headers={"Content-Type": self.headers.get("Content-Type", "application/json")}
-            )
-
-            # Optional: pass Authorization header if present
-            if "Authorization" in self.headers:
-                req.add_header("Authorization", self.headers.get("Authorization"))
-
-            response = urllib.request.urlopen(req, timeout=600)
-
-            # Send response headers
-            self.send_response(response.status)
-            is_stream = ("/api/chat" in ollama_path or "/api/generate" in ollama_path)
-
-            for header, value in response.getheaders():
-                lower = header.lower()
-                if lower not in ("transfer-encoding", "connection", "content-length"):
-                    self.send_header(header, value)
-
-            self._cors_headers()
-            self.end_headers()
-
-            # Stream the response in chunks
-            while True:
-                chunk = response.read(4096)
-                if not chunk:
-                    break
-                
-                # If bridging llama.cpp SSE to Ollama JSONL
-                if LLAMA_CPP_MODE and is_stream:
-                    text = chunk.decode(errors="ignore")
-                    lines = text.split("\n")
-                    for line in lines:
-                        if line.startswith("data: "):
-                            data = line[6:].strip()
-                            if data == "[DONE]":
-                                break
-                            try:
-                                j = json.loads(data)
-                                if "choices" in j and len(j["choices"]) > 0:
-                                    delta = j["choices"][0].get("delta", {})
-                                    out = {
-                                        "message": {"role": "assistant", "content": delta.get("content", "")},
-                                        "done": False
-                                    }
-                                    self.wfile.write((json.dumps(out) + "\n").encode())
-                                    self.wfile.flush()
-                            except:
-                                pass
-                else:
-                    self.wfile.write(chunk)
-                    if is_stream:
-                        self.wfile.flush()
+            # --- default: straight proxy
+            return self._proxy_passthrough(method, OLLAMA_HOST + ollama_path, body, is_stream=False)
 
         except urllib.error.HTTPError as e:
-            self.send_response(e.code)
-            self._cors_headers()
-            self.end_headers()
-            try:
-                self.wfile.write(e.read())
-            except:
-                pass
-
+            self.send_response(e.code); self._cors_headers(); self.end_headers()
+            try: self.wfile.write(e.read())
+            except Exception: pass
         except urllib.error.URLError as e:
-            self.send_response(502)
-            self._cors_headers()
-            self.end_headers()
-            msg = json.dumps({"error": f"Cannot reach Ollama engine: {str(e.reason)}"})
-            self.wfile.write(msg.encode())
-
+            self.send_response(502); self._cors_headers(); self.end_headers()
+            self.wfile.write(json.dumps({"error": f"Cannot reach engine: {e.reason}"}).encode())
         except Exception as e:
-            self.send_response(500)
-            self._cors_headers()
-            self.end_headers()
+            self.send_response(500); self._cors_headers(); self.end_headers()
             self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+    def _respond_json(self, obj, status=200):
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self._cors_headers()
+        self.end_headers()
+        self.wfile.write(json.dumps(obj).encode())
+
+    def _should_route_to_llamacpp(self, body):
+        if LLAMA_CPP_MODE:
+            return True
+        if not (LLAMACPP_HOST and LLAMACPP_MODEL_ID and body):
+            return False
+        try:
+            req_model = (json.loads(body).get("model") or "").split(":")[0]
+        except Exception:
+            return False
+        return req_model == LLAMACPP_MODEL_ID
+
+    def _handle_hybrid_tags(self):
+        """GET /ollama/api/tags -> Ollama's list + synthetic llama-server entry."""
+        try:
+            resp = urllib.request.urlopen(urllib.request.Request(OLLAMA_HOST + "/api/tags"), timeout=5)
+            data = json.loads(resp.read().decode())
+        except Exception:
+            data = {"models": []}
+        existing = {m.get("name", "").split(":")[0] for m in data.get("models", [])}
+        if LLAMACPP_MODEL_ID not in existing:
+            data.setdefault("models", []).append({
+                "name":        f"{LLAMACPP_MODEL_ID}:latest",
+                "model":       f"{LLAMACPP_MODEL_ID}:latest",
+                "size":        0,
+                "modified_at": "1970-01-01T00:00:00Z",
+                "details":     {"family": "gemma4", "format": "gguf", "parameter_size": "llama.cpp"},
+            })
+        self._respond_json(data)
+
+    def _handle_llamacpp_chat(self, body):
+        """POST /ollama/api/chat routed to llama-server with Ollama<->OpenAI translation."""
+        ollama_req = json.loads(body) if body else {}
+        is_stream  = bool(ollama_req.get("stream", True))
+        opts = ollama_req.get("options") or {}
+        openai_req = {
+            "messages":    ollama_req.get("messages", []),
+            "stream":      is_stream,
+            "temperature": opts.get("temperature", 0.7),
+            "top_p":       opts.get("top_p", 0.95),
+            "max_tokens":  opts.get("num_predict", 512),
+        }
+        host = LLAMACPP_HOST or OLLAMA_HOST
+        req = urllib.request.Request(
+            host + "/v1/chat/completions",
+            data=json.dumps(openai_req).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        resp = urllib.request.urlopen(req, timeout=600)
+
+        if not is_stream:
+            return self._emit_ollama_from_openai_json(resp)
+        return self._stream_openai_sse_as_ollama_ndjson(resp)
+
+    def _emit_ollama_from_openai_json(self, resp):
+        """Translate a single non-streaming OpenAI chat completion into Ollama's chat format."""
+        raw = resp.read()
+        try:
+            oj = json.loads(raw.decode())
+            msg = (oj.get("choices") or [{}])[0].get("message", {}) or {}
+            # Gemma 4 (and other DeepSeek-style reasoners) may leak the answer into
+            # reasoning_content when llama-server's --reasoning-format isn't "none".
+            content = msg.get("content") or msg.get("reasoning_content") or ""
+            timings = oj.get("timings") or {}
+            usage   = oj.get("usage")   or {}
+            eval_count = timings.get("predicted_n") or usage.get("completion_tokens") or 0
+            eval_ns    = int((timings.get("predicted_ms") or 0) * 1_000_000)
+            self._respond_json({
+                "model":             oj.get("model", ""),
+                "created_at":        "",
+                "message":           {"role": "assistant", "content": content},
+                "done":              True,
+                "done_reason":       (oj.get("choices") or [{}])[0].get("finish_reason", "stop"),
+                "total_duration":    eval_ns,
+                "eval_count":        eval_count,
+                "eval_duration":     eval_ns,
+                "prompt_eval_count": usage.get("prompt_tokens", 0),
+            })
+        except Exception as e:
+            self._respond_json(
+                {"error": f"translate failed: {e}",
+                 "raw": raw.decode(errors="ignore")[:500]},
+                status=502,
+            )
+
+    def _stream_openai_sse_as_ollama_ndjson(self, resp):
+        """Stream SSE chunks from llama-server as Ollama-style newline-delimited JSON."""
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson")
+        self._cors_headers()
+        self.end_headers()
+        while True:
+            chunk = resp.read(4096)
+            if not chunk:
+                break
+            for line in chunk.decode(errors="ignore").split("\n"):
+                if not line.startswith("data: "):
+                    continue
+                data = line[6:].strip()
+                if data == "[DONE]":
+                    try:
+                        self.wfile.write((json.dumps({"message": {"role": "assistant", "content": ""}, "done": True}) + "\n").encode())
+                        self.wfile.flush()
+                    except Exception as e:
+                        sys.stderr.write(f"[chat_server] stream DONE flush failed: {e}\n")
+                    break
+                try:
+                    j = json.loads(data)
+                except Exception as e:
+                    sys.stderr.write(f"[chat_server] SSE parse failed: {e}\n")
+                    continue
+                choices = j.get("choices") or []
+                if not choices:
+                    continue
+                delta = choices[0].get("delta", {})
+                piece = delta.get("content", "")
+                if not piece:
+                    continue
+                try:
+                    self.wfile.write((json.dumps({"message": {"role": "assistant", "content": piece}, "done": False}) + "\n").encode())
+                    self.wfile.flush()
+                except Exception as e:
+                    sys.stderr.write(f"[chat_server] stream write failed: {e}\n")
+                    return
+
+    def _proxy_passthrough(self, method, target_url, body, is_stream):
+        """Straight proxy: request -> response bytes, no translation."""
+        req = urllib.request.Request(
+            target_url,
+            data=body,
+            method=method,
+            headers={"Content-Type": self.headers.get("Content-Type", "application/json")},
+        )
+        if "Authorization" in self.headers:
+            req.add_header("Authorization", self.headers.get("Authorization"))
+        response = urllib.request.urlopen(req, timeout=600)
+        self.send_response(response.status)
+        for header, value in response.getheaders():
+            if header.lower() not in ("transfer-encoding", "connection", "content-length"):
+                self.send_header(header, value)
+        self._cors_headers()
+        self.end_headers()
+        while True:
+            chunk = response.read(4096)
+            if not chunk:
+                break
+            self.wfile.write(chunk)
+            if is_stream:
+                self.wfile.flush()
 
 
 class ThreadedHTTPServer(http.server.HTTPServer):
@@ -532,7 +621,9 @@ def main():
     print()
     print(f"  Local Access:    http://localhost:{CHAT_SERVER_PORT}")
     print(f"  Network Access:  http://{local_ip}:{CHAT_SERVER_PORT}   <-- Use this on phone/other PC!")
-    print(f"  Ollama/Llama Proxy: {OLLAMA_HOST}")
+    print(f"  Ollama Proxy:       {OLLAMA_HOST}")
+    if LLAMACPP_HOST and LLAMACPP_MODEL_ID:
+        print(f"  llama.cpp Proxy:    {LLAMACPP_HOST}  (serving '{LLAMACPP_MODEL_ID}')")
     if LLAMA_CPP_MODE:
         print("  Running in LLAMA_CPP_MODE (Translating API requests)")
     print()
