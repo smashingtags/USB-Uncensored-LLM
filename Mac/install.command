@@ -113,6 +113,28 @@ for id in "${IMPORTED[@]}"; do
 done
 ely_write_state "Shared/bin/$BACKEND_KEY/$BACKEND_ENTRY" "$SMOKE_TPS" "${IMPORTED[@]}"
 
+# ---------- Optional: Node.js portable for agent dashboard ----------
+TOOLS_DIR="$SHARED/tools"
+NODE_DIR="$TOOLS_DIR/node"
+NODE_BIN="$NODE_DIR/bin/node"
+if [[ ! -x "$NODE_BIN" ]]; then
+  ARCH=$(uname -m)
+  NODE_KEY="node-darwin-x64"
+  [[ "$ARCH" == "arm64" ]] && NODE_KEY="node-darwin-arm64"
+  NODE_URL=$(python3 -c "import json; c=json.load(open('$CATALOG')); print(c.get('tools',{}).get('$NODE_KEY',{}).get('url',''))")
+  if [[ -n "$NODE_URL" ]]; then
+    ely_info "Downloading Node.js portable for the agent dashboard ..."
+    mkdir -p "$NODE_DIR"
+    ARC="$NODE_DIR/_node.tar.gz"
+    if curl $CURL_OPTS -C - "$NODE_URL" -o "$ARC" 2>/dev/null; then
+      tar -xzf "$ARC" -C "$NODE_DIR" --strip-components=1 2>/dev/null && ely_ok "Node.js portable installed"
+      rm -f "$ARC"
+    else
+      ely_info "Node.js download failed (agent dashboard will be unavailable)"
+    fi
+  fi
+fi
+
 ely_banner "Install summary"
 echo "  Backend:    $BACKEND_LABEL"
 echo "  GPU:        $GPU_NAME"

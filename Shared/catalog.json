@@ -1,6 +1,40 @@
 {
   "product": "Eight.ly Forge",
   "version": "1.0.0",
+  "tools": {
+    "node-windows": {
+      "label": "Node.js portable (Windows x64)",
+      "url": "https://nodejs.org/dist/v20.18.1/node-v20.18.1-win-x64.zip",
+      "sizeBytes": 29500000,
+      "entrypoint": "node.exe",
+      "note": "Drives the agent dashboard (Shared/agent/server.mjs). No host Node.js required."
+    },
+    "node-darwin-arm64": {
+      "label": "Node.js portable (macOS ARM64)",
+      "url": "https://nodejs.org/dist/v20.18.1/node-v20.18.1-darwin-arm64.tar.gz",
+      "sizeBytes": 25500000,
+      "entrypoint": "bin/node"
+    },
+    "node-darwin-x64": {
+      "label": "Node.js portable (macOS x64)",
+      "url": "https://nodejs.org/dist/v20.18.1/node-v20.18.1-darwin-x64.tar.gz",
+      "sizeBytes": 25500000,
+      "entrypoint": "bin/node"
+    },
+    "node-linux-x64": {
+      "label": "Node.js portable (Linux x64)",
+      "url": "https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-x64.tar.xz",
+      "sizeBytes": 24000000,
+      "entrypoint": "bin/node"
+    },
+    "git-windows": {
+      "label": "MinGit (portable Git for Windows)",
+      "url": "https://github.com/git-for-windows/git/releases/download/v2.47.0.windows.2/MinGit-2.47.0.2-64-bit.zip",
+      "sizeBytes": 56000000,
+      "entrypoint": "cmd/git.exe",
+      "note": "Optional. Agent dashboard exposes git operations when this is present."
+    }
+  },
   "backends": {
     "windows-intel": {
       "label": "Intel Arc / IPEX-LLM",

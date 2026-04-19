@@ -161,10 +161,26 @@ if not defined PYTHON_CMD (
 )
 echo   Python: %PYTHON_CMD%
 
+REM ---- Optional: agent dashboard (Shared\agent\server.mjs) on :3334 ----
+REM Only boots if Node.js portable is present (installed by install.bat when
+REM Shared\tools\node is downloaded). Agent is OFF by default otherwise.
+if not defined ELY_AGENT_PORT set "ELY_AGENT_PORT=3334"
+set "NODE_CMD="
+if exist "%SHARED%\tools\node\node.exe" set "NODE_CMD=%SHARED%\tools\node\node.exe"
+if defined NODE_CMD if exist "%SHARED%\agent\server.mjs" (
+    echo   Starting agent dashboard on :%ELY_AGENT_PORT% ...
+    set "ELY_OLLAMA_URL=http://127.0.0.1:%ELY_RUNTIME_PORT%"
+    set "ELY_LLAMACPP_URL=%ELY_LLAMACPP_URL%"
+    start "Eight.ly Forge Agent" /b "%NODE_CMD%" "%SHARED%\agent\server.mjs"
+)
+
 echo.
 echo   ========================================================
 echo      Eight.ly Forge is running.
-echo      Chat UI:  http://localhost:%ELY_CHAT_PORT%
+echo      Chat UI:      http://localhost:%ELY_CHAT_PORT%
+if defined NODE_CMD (
+    echo      Agent UI:     http://localhost:%ELY_AGENT_PORT%
+)
 echo      Close this window to shut down.
 echo   ========================================================
 echo.
@@ -177,5 +193,8 @@ taskkill /f /im ollama.exe >nul 2>&1
 taskkill /f /im ollama-lib.exe >nul 2>&1
 taskkill /f /im ollama-windows.exe >nul 2>&1
 taskkill /f /im llama-server.exe >nul 2>&1
+REM Kill the detached node agent, if any — match by the server.mjs path so we
+REM don't touch any other node.exe the user might be running.
+for /f "tokens=2" %%p in ('tasklist /v /fi "imagename eq node.exe" ^| findstr /i "server.mjs"') do taskkill /f /pid %%p >nul 2>&1
 taskkill /f /im llama-cli.exe >nul 2>&1
 echo   Done.

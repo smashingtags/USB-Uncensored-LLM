@@ -365,6 +365,64 @@ Remove-Job $serveJob -ErrorAction SilentlyContinue
 $installedLines = foreach ($m in $imported) { "$($m.id)|$($m.name)|$($m.quality)" }
 $installedLines | Set-Content -Path (Join-Path $ModelsDir 'installed-models.txt') -Encoding UTF8
 
+# ---------- Optional: Node.js portable + MinGit for the agent dashboard ----------
+# Downloaded after models because they're optional — the chat UI works without
+# them; only the agent dashboard on :3334 needs Node. Gracefully fails: if the
+# download blips the chat surface still boots.
+$ToolsDir = Join-Path $Shared 'tools'
+New-Item -ItemType Directory -Force -Path $ToolsDir | Out-Null
+if ($Catalog.tools) {
+    Write-Step 6 'Installing agent tools (Node.js + MinGit)'
+    $nodeTool = $Catalog.tools.'node-windows'
+    if ($nodeTool) {
+        $nodeDir = Join-Path $ToolsDir 'node'
+        $nodeExe = Join-Path $nodeDir $nodeTool.entrypoint
+        if (Test-Path $nodeExe) {
+            Write-Ok "Node.js portable already present"
+        } else {
+            New-Item -ItemType Directory -Force -Path $nodeDir | Out-Null
+            $arc = Join-Path $nodeDir '_node.zip'
+            Write-Info "Downloading Node.js portable ($($nodeTool.url))"
+            & curl.exe -L --fail --ssl-no-revoke --progress-bar -C - $nodeTool.url -o $arc
+            if ($LASTEXITCODE -eq 0 -and (Test-Path $arc)) {
+                Expand-Archive -Path $arc -DestinationPath $nodeDir -Force
+                Remove-Item $arc -Force -ErrorAction SilentlyContinue
+                # ZIP contains node-v20.x-win-x64/ top-level; flatten it.
+                $found = Get-ChildItem -Path $nodeDir -Recurse -Filter 'node.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($found -and $found.FullName -ne $nodeExe) {
+                    Get-ChildItem -Path (Split-Path $found.FullName -Parent) | Move-Item -Destination $nodeDir -Force -ErrorAction SilentlyContinue
+                }
+                if (Test-Path $nodeExe) { Write-Ok "Node.js portable installed" }
+                else { Write-Info "Node.js extracted but entrypoint not found; agent dashboard will be unavailable" }
+            } else {
+                Write-Info "Node.js download failed (agent dashboard will be unavailable)"
+            }
+        }
+    }
+    $gitTool = $Catalog.tools.'git-windows'
+    if ($gitTool) {
+        $gitDir = Join-Path $ToolsDir 'git'
+        $gitExe = Join-Path $gitDir $gitTool.entrypoint
+        if (Test-Path $gitExe) {
+            Write-Ok "MinGit already present"
+        } else {
+            New-Item -ItemType Directory -Force -Path $gitDir | Out-Null
+            $arc = Join-Path $gitDir '_git.zip'
+            Write-Info "Downloading MinGit portable ($($gitTool.url))"
+            & curl.exe -L --fail --ssl-no-revoke --progress-bar -C - $gitTool.url -o $arc
+            if ($LASTEXITCODE -eq 0 -and (Test-Path $arc)) {
+                Expand-Archive -Path $arc -DestinationPath $gitDir -Force
+                Remove-Item $arc -Force -ErrorAction SilentlyContinue
+                if (Test-Path $gitExe) { Write-Ok "MinGit installed" }
+                else { Write-Info "MinGit extracted but entrypoint not found" }
+            } else {
+                Write-Info "MinGit download failed (agent will run without git)"
+            }
+        }
+    }
+}
+
+
 $secondaryList = @()
 foreach ($secKey in $secondaryBackendsNeeded.Keys) {
     $sec = $Catalog.backends.$secKey

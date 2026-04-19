@@ -9,7 +9,7 @@ CATALOG="$SHARED/catalog.json"
 
 echo
 echo "  ========================================================"
-echo "                     EIGHT.LY STICK"
+echo "                     EIGHT.LY FORGE"
 echo "  ========================================================"
 echo
 
@@ -58,13 +58,28 @@ else
   echo "  [OK] Engine online."
 fi
 
-cleanup(){ echo; echo "  Shutting down engine..."; pkill -9 -f 'ollama' 2>/dev/null || true; }
+cleanup(){
+  echo; echo "  Shutting down engines..."
+  pkill -9 -f 'ollama' 2>/dev/null || true
+  pkill -9 -f 'llama-server' 2>/dev/null || true
+  pkill -9 -f 'Shared/agent/server.mjs' 2>/dev/null || true
+}
 trap cleanup EXIT INT TERM
+
+# Optional: agent dashboard on :3334 (if Node.js portable was installed).
+ELY_AGENT_PORT="${ELY_AGENT_PORT:-3334}"
+NODE_BIN=""
+[[ -x "$SHARED/tools/node/bin/node" ]] && NODE_BIN="$SHARED/tools/node/bin/node"
+if [[ -n "$NODE_BIN" && -f "$SHARED/agent/server.mjs" ]]; then
+  echo "  Starting agent dashboard on :$ELY_AGENT_PORT..."
+  ELY_AGENT_PORT="$ELY_AGENT_PORT" "$NODE_BIN" "$SHARED/agent/server.mjs" >"$SHARED/chat_data/agent.log" 2>&1 &
+fi
 
 echo
 echo "  ========================================================"
 echo "     Eight.ly Forge is running."
-echo "     Chat UI:  http://localhost:3333"
+echo "     Chat UI:      http://localhost:3333"
+[[ -n "$NODE_BIN" ]] && echo "     Agent UI:     http://localhost:$ELY_AGENT_PORT"
 echo "     Ctrl+C to shut down."
 echo "  ========================================================"
 echo
