@@ -84,21 +84,19 @@ Ultimate-AI-Stick/
     └── bin/                                      <- created by install (Node, etc.)
 ```
 
-## WHAT'S DONE ON THIS BRANCH
+## WHAT'S DONE ON THIS BRANCH (8 commits, all pushed)
 
-- Branched from `56ac091` (clean: Eight.ly Stick refactor + SSE fix + AMD/Strix Halo + Gemma 4 reasoning fix)
-- HANDOFF written
-- Not yet started building the unified product
+1. `f3cd7b7` — Restructured folder: OpenClaude dashboard + per-platform scripts copied in alongside existing chat UI
+2. `c15d90c` — Merged install flows: Windows Setup_First_Time.bat chains into install-core.ps1, Start_AI.bat boots local engines + chat UI alongside OpenClaude
+3. `e22a198` — Re-applied useful fixes: debounced saves, warm-up, coder models (Qwen2.5-Coder 7B, DeepSeek-Coder-V2 Lite, Nomic Embed)
+4. `23f7a0c` — In-browser model management: Models button in chat UI, pull + delete without bat files
+5. `22c4e7a` — VS Code Portable download step in Windows Setup_First_Time.bat
+6. `ad16fd8` — README rewrite for the unified product
+7. `8f5a49f` — Mac + Linux parity: setup chains into local-model install, start_ai boots engines, Ollama provider redirects to :11438
 
-## NEXT STEPS
+## WHAT'S LEFT
 
-1. Restructure the folder layout to match the architecture above
-2. Merge OpenClaude's scripts into the install/start flow
-3. Add model management to the chat UI (install/uninstall from within FastChatUI)
-4. Re-apply the 4 useful changes (debounce, warmup, coder models, etc.)
-5. Add VS Code Portable download to the installer
-6. Wire OpenClaude as a VS Code extension / integrated terminal tool
-7. Rewrite README
-8. Test end-to-end on amd-beast (Windows + Intel Arc)
-9. Test on Mac Mini (Apple Silicon)
-10. Replace main when verified
+- Wire OpenClaude as a pre-installed extension inside portable VS Code (currently VS Code downloads but user must open terminal manually to use OpenClaude)
+- End-to-end test on amd-beast (Windows + Intel Arc)
+- End-to-end test on Mac Mini (Apple Silicon)
+- Replace main when Michael approves the branch
