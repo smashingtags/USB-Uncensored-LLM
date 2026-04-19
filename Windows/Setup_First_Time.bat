@@ -253,12 +253,70 @@ if /I "!INSTALL_LOCAL!"=="Y" (
 ) else if /I "!INSTALL_LOCAL!"=="N" (
     echo.
     echo   !DIM!Skipped local models. You can install them later by!RESET!
-    echo   !DIM!running Windows\install.bat or Setup_Local_Models.bat.!RESET!
+    echo   !DIM!running Windows\install.bat or from the chat UI Models button.!RESET!
     echo.
 ) else (
     echo   !RED![ERROR] Please select Y or N.!RESET!
     goto prompt_local
 )
+
+:: ─── Step 7: Portable VS Code (optional) ────────────────────
+echo.
+echo !CYAN!---------------------------------------------------------!RESET!
+echo   !BOLD!Portable VS Code (optional)!RESET!
+echo !CYAN!---------------------------------------------------------!RESET!
+echo.
+echo   VS Code Portable runs from the stick with OpenClaude pre-configured
+echo   as the AI coding assistant inside the editor. Your extensions and
+echo   settings travel with the stick across computers.
+echo.
+set "VSCODE_DIR=%ROOT_DIR%tools\vscode"
+if exist "%VSCODE_DIR%\Code.exe" (
+    echo   !GREEN![OK] VS Code Portable already installed.!RESET!
+    echo.
+    goto skip_vscode
+)
+:prompt_vscode
+set "INSTALL_VSCODE="
+set /p "INSTALL_VSCODE=  Install Portable VS Code? (~120MB download) (Y/N): "
+if defined INSTALL_VSCODE set "INSTALL_VSCODE=!INSTALL_VSCODE: =!"
+if /I "!INSTALL_VSCODE!"=="Y" (
+    echo.
+    echo   !CYAN![~] Downloading VS Code Portable...!RESET!
+    if not exist "%ROOT_DIR%tools" mkdir "%ROOT_DIR%tools"
+    set "VSCODE_ZIP=%ROOT_DIR%tools\_vscode.zip"
+    set "VSCODE_URL=https://update.code.visualstudio.com/latest/win32-x64-archive/stable"
+    set "DL_OK=0"
+    for /L %%R in (1,1,3) do (
+        if !DL_OK!==0 (
+            if %%R GTR 1 echo   !YELLOW!  Retry %%R/3...!RESET!
+            curl.exe -# -L -o "!VSCODE_ZIP!" "!VSCODE_URL!"
+            if not errorlevel 1 set "DL_OK=1"
+        )
+    )
+    if !DL_OK!==0 (
+        echo   !RED!  [WARN] VS Code download failed. Skipping.!RESET!
+    ) else (
+        echo   !CYAN!  Extracting...!RESET!
+        if not exist "!VSCODE_DIR!" mkdir "!VSCODE_DIR!"
+        tar.exe -xf "!VSCODE_ZIP!" -C "!VSCODE_DIR!"
+        del "!VSCODE_ZIP!" 2>nul
+        REM Enable portable mode by creating the data folder
+        if not exist "!VSCODE_DIR!\data" mkdir "!VSCODE_DIR!\data"
+        if not exist "!VSCODE_DIR!\data\user-data" mkdir "!VSCODE_DIR!\data\user-data"
+        echo   !GREEN!  [OK] VS Code Portable installed!!RESET!
+        echo   !DIM!  Portable mode enabled (data\user-data on the stick).!RESET!
+    )
+    echo.
+) else if /I "!INSTALL_VSCODE!"=="N" (
+    echo.
+    echo   !DIM!Skipped VS Code. You can install it manually later.!RESET!
+    echo.
+) else (
+    echo   !RED![ERROR] Please select Y or N.!RESET!
+    goto prompt_vscode
+)
+:skip_vscode
 
 :: ─── Installation Summary ────────────────────────────────────
 
