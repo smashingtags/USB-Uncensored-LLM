@@ -20,4 +20,7 @@ Desktop.ini
 .DS_Store
 Shared/tools/
 data/
-tools/
+# Ignore downloaded tool binaries (Node, Git, VS Code) but keep the workspace config
+tools/vscode/
+tools/node/
+tools/git/

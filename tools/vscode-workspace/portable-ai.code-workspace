@@ -1,0 +1,60 @@
+{
+  "folders": [
+    {
+      "path": "../..",
+      "name": "Portable AI Stick"
+    }
+  ],
+  "settings": {
+    "terminal.integrated.defaultProfile.windows": "Command Prompt",
+    "terminal.integrated.env.windows": {
+      "CLAUDE_CONFIG_DIR": "${workspaceFolder}/data/openclaude",
+      "XDG_CONFIG_HOME": "${workspaceFolder}/data/config",
+      "XDG_DATA_HOME": "${workspaceFolder}/data/app_data"
+    },
+    "files.exclude": {
+      "**/Shared/bin": true,
+      "**/Shared/models": true,
+      "**/Shared/tools": true,
+      "**/tools/vscode": true,
+      "**/.git": true
+    }
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Start OpenClaude (Normal Mode)",
+        "type": "shell",
+        "command": "${workspaceFolder}/Windows/Start_AI.bat",
+        "group": "build",
+        "presentation": { "reveal": "always", "panel": "dedicated" },
+        "problemMatcher": []
+      },
+      {
+        "label": "Start OpenClaude (Limitless Mode)",
+        "type": "shell",
+        "command": "${workspaceFolder}/Windows/Start_AI.bat --quick",
+        "group": "build",
+        "presentation": { "reveal": "always", "panel": "dedicated" },
+        "problemMatcher": []
+      },
+      {
+        "label": "Open Chat UI",
+        "type": "shell",
+        "command": "start http://localhost:3333",
+        "group": "none",
+        "presentation": { "reveal": "silent" },
+        "problemMatcher": []
+      },
+      {
+        "label": "Open Dashboard",
+        "type": "shell",
+        "command": "start http://localhost:3000",
+        "group": "none",
+        "presentation": { "reveal": "silent" },
+        "problemMatcher": []
+      }
+    ]
+  }
+}
